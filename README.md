@@ -46,7 +46,7 @@ The quickest tour is the dashboard's **Resilience lab**: four guided scenarios (
 5. In **Simulation lab**, stop PostgreSQL. Raft continues capacity decisions; audit entries catch up when the database returns. Buffered readings can be lost if their gateway crashes.
 6. Set 10, 50, or 200 meters and vary the demand multiplier. The UI separates requested demand, served demand, and reserved capacity; excess demand is curtailed rather than treated as extra authorized capacity.
 
-Allocation is first-come and a renewal never shrinks a reservation, so after a 200-meter run one building can keep a large reservation and starve the others (the invariant still holds). Run `python scripts/reset_demo.py` to restart the gateways and return to a fair allocation. This trade-off is explained in the report.
+Reservations are tiered: a renewal adds a short-lived tier and the reserved amount steps down to a building's current demand about 12 seconds after demand falls (the Activity log shows "Reservation reduced"), but never while an older, larger grant could still be in use. Allocation is still first-come, so while two buildings both demand more than the free capacity the first keeps it. `python scripts/reset_demo.py` restarts the gateways for an immediate clean state. The design and its safety argument are in [docs/LEASE_TIERS.md](docs/LEASE_TIERS.md) and the report.
 
 The local demo controller holds the Docker socket and only permits start/stop/restart of this project's named, label-verified containers. This is a trusted local demonstration capability, not a public deployment design. Disable `ENABLE_DEMO` and remove the socket mount before reusing the application outside this setting. The included database password is a public demo fixture, not a production credential.
 
@@ -87,7 +87,7 @@ python scripts/evaluate.py
 
 See [the report](docs/PROJECT_REPORT.md), [submission PDF](docs/Ishtirak_Project_Report.pdf), and [raw evaluation](artifacts/evaluation.json) for the results and limitations. The [PowerPoint](docs/Ishtirak_Presentation.pptx) contains 16 slides with a speaking script in the notes.
 
-The completed run passed all eleven integration phases, with no capacity violations in 708 coordinator observations. The simultaneous 40-request stress admitted 17 requests of 7 A each: 119 A under the 120 A limit. Load results are the mean of five trials, failover and reclamation of three, and a concurrency sweep to 64 clients plus an end-to-end telemetry latency were added. The report explains the sampling and timing limits.
+The completed run passed all twelve integration phases, with no capacity violations in 947 coordinator observations. The simultaneous 40-request stress admitted 17 requests of 7 A each: 119 A under the 120 A limit. Load results are the mean of five trials, failover and reclamation of three, with a concurrency sweep to 64 clients, an end-to-end telemetry latency and a demand-spike recovery phase (every building back within budget 17.6 s after the spike). The run before the lease-tier change is kept as `artifacts/evaluation-before-tiers.json`. The report explains the sampling and timing limits.
 
 Randomized fault check (seeded fault schedule, concurrent randomized grants and replays, history checked against the capacity invariant; its result is in `artifacts/chaos-check.json`):
 

@@ -245,7 +245,7 @@ func (s *Server) expirations(ctx context.Context) {
 					}
 					state := s.fsm.View()
 					l, ok := state.Leases[id]
-					if !ok || l.Version != version {
+					if !ok || !l.HasTier(version) {
 						continue
 					}
 					n, _ := strconv.ParseUint(term, 10, 64)

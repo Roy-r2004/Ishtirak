@@ -1,96 +1,96 @@
 {
-  "run_id": "f85446506835",
-  "started_at": "2026-10-29T11:25:41.752410+00:00",
+  "run_id": "c6d1e46130fc",
+  "started_at": "2026-10-29T12:32:09.165882+00:00",
   "base_url": "http://127.0.0.1:8088",
   "phases": {
     "readiness_and_real_mqtt": {
       "passed": true,
-      "seconds": 1.75,
+      "seconds": 1.344,
       "leader": "coordinator2",
-      "durable_readings": 506853
+      "durable_readings": 710263
     },
     "gateway_crash_and_reclamation": {
       "passed": true,
-      "seconds": 42.703,
+      "seconds": 49.609,
       "building": "achrafieh",
-      "reclaim_seconds": 11.969,
-      "previous_amps": 26,
+      "reclaim_seconds": 13.578,
+      "previous_amps": 25,
       "fresh_session_verified": true,
       "trials": [
         {
           "trial": 1,
           "building": "achrafieh",
-          "reclaim_seconds": 11.969,
-          "previous_amps": 26,
+          "reclaim_seconds": 14.375,
+          "previous_amps": 27,
           "fresh_session_verified": true
         },
         {
           "trial": 2,
-          "building": "hamra",
-          "reclaim_seconds": 10.797,
-          "previous_amps": 30,
+          "building": "achrafieh",
+          "reclaim_seconds": 13.578,
+          "previous_amps": 25,
           "fresh_session_verified": true
         },
         {
           "trial": 3,
-          "building": "achrafieh",
-          "reclaim_seconds": 14.25,
-          "previous_amps": 27,
+          "building": "hamra",
+          "reclaim_seconds": 12.891,
+          "previous_amps": 24,
           "fresh_session_verified": true
         }
       ],
       "summary": {
         "reclaim_seconds": {
           "n": 3,
-          "mean": 12.339,
-          "stdev": 1.756,
-          "min": 10.797,
-          "max": 14.25
+          "mean": 13.615,
+          "stdev": 0.743,
+          "min": 12.891,
+          "max": 14.375
         }
       },
-      "headline_basis": "top-level fields are from the median trial by reclaim_seconds (trial 1 of 3); see trials and summary"
+      "headline_basis": "top-level fields are from the median trial by reclaim_seconds (trial 2 of 3); see trials and summary"
     },
     "leader_failure": {
       "passed": true,
-      "seconds": 20.594,
-      "previous_leader": "coordinator3",
-      "replacement_leader": "coordinator1",
-      "majority_grant_seconds": 4.062,
+      "seconds": 21.735,
+      "previous_leader": "coordinator2",
+      "replacement_leader": "coordinator3",
+      "majority_grant_seconds": 4.047,
       "trials": [
         {
           "trial": 1,
           "previous_leader": "coordinator2",
-          "replacement_leader": "coordinator3",
+          "replacement_leader": "coordinator1",
           "majority_grant_seconds": 4.047
         },
         {
           "trial": 2,
-          "previous_leader": "coordinator3",
-          "replacement_leader": "coordinator1",
-          "majority_grant_seconds": 4.062
+          "previous_leader": "coordinator1",
+          "replacement_leader": "coordinator2",
+          "majority_grant_seconds": 6.391
         },
         {
           "trial": 3,
-          "previous_leader": "coordinator1",
-          "replacement_leader": "coordinator2",
-          "majority_grant_seconds": 6.343
+          "previous_leader": "coordinator2",
+          "replacement_leader": "coordinator3",
+          "majority_grant_seconds": 4.047
         }
       ],
       "summary": {
         "majority_grant_seconds": {
           "n": 3,
-          "mean": 4.817,
-          "stdev": 1.321,
+          "mean": 4.828,
+          "stdev": 1.353,
           "min": 4.047,
-          "max": 6.343
+          "max": 6.391
         }
       },
-      "headline_basis": "top-level fields are from the median trial by majority_grant_seconds (trial 2 of 3); see trials and summary"
+      "headline_basis": "top-level fields are from the median trial by majority_grant_seconds (trial 3 of 3); see trials and summary"
     },
     "majority_loss": {
       "passed": true,
-      "seconds": 18.703,
-      "survivor": "coordinator2",
+      "seconds": 17.875,
+      "survivor": "coordinator3",
       "new_grant_attempts": [
         {
           "status": 503,
@@ -112,17 +112,17 @@
     },
     "postgres_outage_and_audit_catchup": {
       "passed": true,
-      "seconds": 11.578,
+      "seconds": 24.031,
       "grant_accepted_without_postgres": true,
-      "audit_rows_before": 8291,
-      "audit_rows_after": 8314,
+      "audit_rows_before": 19543,
+      "audit_rows_after": 19594,
       "outage_request_durable": true,
-      "durable_readings_delta": 550,
-      "observed_pending_during_outage": 66
+      "durable_readings_delta": 1184,
+      "observed_pending_during_outage": 50
     },
     "capacity_stress_and_idempotency": {
       "passed": true,
-      "seconds": 33.484,
+      "seconds": 37.781,
       "concurrent_requests": 40,
       "requested_amps_each": 7,
       "accepted": 17,
@@ -135,26 +135,26 @@
     },
     "load_10_meters": {
       "passed": true,
-      "seconds": 36.375,
+      "seconds": 39.234,
       "meter_count": 10,
       "demand_factor": 1.0,
       "settle_seconds": 10,
-      "headline_basis": "top-level latency fields are from the median trial by p50_ms (trial 3 of 5); see trials and summary",
+      "headline_basis": "top-level latency fields are from the median trial by p50_ms (trial 5 of 5); see trials and summary",
       "trials": [
         {
           "trial": 1,
-          "p50_ms": 80.672,
-          "p95_ms": 110.069,
-          "decisions_per_second": 49.303,
+          "p50_ms": 93.008,
+          "p95_ms": 138.302,
+          "decisions_per_second": 41.718,
           "all_decisions": {
             "count": 200,
-            "p50_ms": 80.672,
-            "p95_ms": 110.069
+            "p50_ms": 93.008,
+            "p95_ms": 138.302
           },
           "accepted": {
             "count": 200,
-            "p50_ms": 80.672,
-            "p95_ms": 110.069
+            "p50_ms": 93.008,
+            "p95_ms": 138.302
           },
           "rejected": {
             "count": 0,
@@ -166,24 +166,24 @@
             "p50_ms": null,
             "p95_ms": null
           },
-          "elapsed_seconds": 4.057,
-          "decision_requests_per_second": 49.303,
+          "elapsed_seconds": 4.794,
+          "decision_requests_per_second": 41.718,
           "measurement": "HTTP decision latency, including denied decisions; four concurrent clients"
         },
         {
           "trial": 2,
-          "p50_ms": 79.311,
-          "p95_ms": 114.898,
-          "decisions_per_second": 49.307,
+          "p50_ms": 94.63,
+          "p95_ms": 143.269,
+          "decisions_per_second": 40.759,
           "all_decisions": {
             "count": 200,
-            "p50_ms": 79.311,
-            "p95_ms": 114.898
+            "p50_ms": 94.63,
+            "p95_ms": 143.269
           },
           "accepted": {
             "count": 200,
-            "p50_ms": 79.311,
-            "p95_ms": 114.898
+            "p50_ms": 94.63,
+            "p95_ms": 143.269
           },
           "rejected": {
             "count": 0,
@@ -195,24 +195,24 @@
             "p50_ms": null,
             "p95_ms": null
           },
-          "elapsed_seconds": 4.056,
-          "decision_requests_per_second": 49.307,
+          "elapsed_seconds": 4.907,
+          "decision_requests_per_second": 40.759,
           "measurement": "HTTP decision latency, including denied decisions; four concurrent clients"
         },
         {
           "trial": 3,
-          "p50_ms": 79.477,
-          "p95_ms": 109.526,
-          "decisions_per_second": 49.899,
+          "p50_ms": 80.66,
+          "p95_ms": 120.121,
+          "decisions_per_second": 46.337,
           "all_decisions": {
             "count": 200,
-            "p50_ms": 79.477,
-            "p95_ms": 109.526
+            "p50_ms": 80.66,
+            "p95_ms": 120.121
           },
           "accepted": {
             "count": 200,
-            "p50_ms": 79.477,
-            "p95_ms": 109.526
+            "p50_ms": 80.66,
+            "p95_ms": 120.121
           },
           "rejected": {
             "count": 0,
@@ -224,24 +224,24 @@
             "p50_ms": null,
             "p95_ms": null
           },
-          "elapsed_seconds": 4.008,
-          "decision_requests_per_second": 49.899,
+          "elapsed_seconds": 4.316,
+          "decision_requests_per_second": 46.337,
           "measurement": "HTTP decision latency, including denied decisions; four concurrent clients"
         },
         {
           "trial": 4,
-          "p50_ms": 78.149,
-          "p95_ms": 120.106,
-          "decisions_per_second": 49.577,
+          "p50_ms": 80.936,
+          "p95_ms": 124.465,
+          "decisions_per_second": 46.155,
           "all_decisions": {
             "count": 200,
-            "p50_ms": 78.149,
-            "p95_ms": 120.106
+            "p50_ms": 80.936,
+            "p95_ms": 124.465
           },
           "accepted": {
             "count": 200,
-            "p50_ms": 78.149,
-            "p95_ms": 120.106
+            "p50_ms": 80.936,
+            "p95_ms": 124.465
           },
           "rejected": {
             "count": 0,
@@ -253,24 +253,24 @@
             "p50_ms": null,
             "p95_ms": null
           },
-          "elapsed_seconds": 4.034,
-          "decision_requests_per_second": 49.577,
+          "elapsed_seconds": 4.333,
+          "decision_requests_per_second": 46.155,
           "measurement": "HTTP decision latency, including denied decisions; four concurrent clients"
         },
         {
           "trial": 5,
-          "p50_ms": 80.109,
-          "p95_ms": 111.632,
-          "decisions_per_second": 48.727,
+          "p50_ms": 83.772,
+          "p95_ms": 139.112,
+          "decisions_per_second": 44.541,
           "all_decisions": {
             "count": 200,
-            "p50_ms": 80.109,
-            "p95_ms": 111.632
+            "p50_ms": 83.772,
+            "p95_ms": 139.112
           },
           "accepted": {
             "count": 200,
-            "p50_ms": 80.109,
-            "p95_ms": 111.632
+            "p50_ms": 83.772,
+            "p95_ms": 139.112
           },
           "rejected": {
             "count": 0,
@@ -282,43 +282,43 @@
             "p50_ms": null,
             "p95_ms": null
           },
-          "elapsed_seconds": 4.104,
-          "decision_requests_per_second": 48.727,
+          "elapsed_seconds": 4.49,
+          "decision_requests_per_second": 44.541,
           "measurement": "HTTP decision latency, including denied decisions; four concurrent clients"
         }
       ],
       "summary": {
         "p50_ms": {
           "n": 5,
-          "mean": 79.544,
-          "stdev": 0.948,
-          "min": 78.149,
-          "max": 80.672
+          "mean": 86.601,
+          "stdev": 6.725,
+          "min": 80.66,
+          "max": 94.63
         },
         "p95_ms": {
           "n": 5,
-          "mean": 113.246,
-          "stdev": 4.368,
-          "min": 109.526,
-          "max": 120.106
+          "mean": 133.054,
+          "stdev": 10.12,
+          "min": 120.121,
+          "max": 143.269
         },
         "decisions_per_second": {
           "n": 5,
-          "mean": 49.363,
-          "stdev": 0.431,
-          "min": 48.727,
-          "max": 49.899
+          "mean": 43.902,
+          "stdev": 2.553,
+          "min": 40.759,
+          "max": 46.337
         }
       },
       "all_decisions": {
         "count": 200,
-        "p50_ms": 79.477,
-        "p95_ms": 109.526
+        "p50_ms": 83.772,
+        "p95_ms": 139.112
       },
       "accepted": {
         "count": 200,
-        "p50_ms": 79.477,
-        "p95_ms": 109.526
+        "p50_ms": 83.772,
+        "p95_ms": 139.112
       },
       "rejected": {
         "count": 0,
@@ -330,74 +330,1202 @@
         "p50_ms": null,
         "p95_ms": null
       },
-      "elapsed_seconds": 4.008,
-      "decision_requests_per_second": 49.899,
+      "elapsed_seconds": 4.49,
+      "decision_requests_per_second": 44.541,
       "measurement": "HTTP decision latency, including denied decisions; four concurrent clients",
       "gateway_meter_count": 10,
-      "reading_observation_seconds": 5.141,
+      "reading_observation_seconds": 5.188,
       "gateway_readings_delta": 50,
-      "gateway_readings_per_second": 9.726,
-      "sql_readings_delta": 53,
-      "served_amps_at_end": 14.94,
+      "gateway_readings_per_second": 9.638,
+      "sql_readings_delta": 57,
+      "served_amps_at_end": 13.439,
       "responses": [
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 81.033,
+          "latency_ms": 113.048,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 99.201,
+          "latency_ms": 112.221,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 84.803,
+          "latency_ms": 142.738,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 85.312,
+          "latency_ms": 122.903,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 98.676,
+          "latency_ms": 63.62,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 89.924,
+          "latency_ms": 114.83,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 60.822,
+          "latency_ms": 173.172,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 54.063,
+          "latency_ms": 93.954,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 81.872,
+          "latency_ms": 141.401,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 81.728,
+          "latency_ms": 92.899,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 103.128,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 110.38,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 108.156,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 74.146,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 54.508,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 141.661,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 154.091,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 76.779,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 107.676,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 103.456,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 92.816,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 83.468,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 88.221,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 85.056,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 81.938,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 81.948,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 86.486,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 81.677,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 85.755,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 85.101,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 78.36,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 87.453,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 115.974,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 90.961,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 52.194,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 84.259,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 114.156,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 77.551,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 52.477,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 73.555,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 73.648,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 73.528,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 72.15,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 78.224,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 79.786,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 79.061,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 68.901,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 78.576,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 114.32,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 78.094,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 63.942,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 73.44,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 74.677,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 64.673,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 77.433,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 58.54,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 118.779,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 145.451,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 122.885,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 107.332,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 192.371,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 185.883,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 138.992,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 148.888,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 104.209,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 107.015,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 105.183,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 85.01,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 94.474,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 109.775,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 86.337,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 108.398,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 80.738,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 83.833,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 80.334,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 79.401,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 106.324,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 62.877,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 66.062,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 65.961,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 87.938,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 103.5,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 84.766,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 119.729,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 70.45,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 78.856,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 80.118,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 62.796,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 45.739,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 79.87,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 94.096,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 79.052,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 79.234,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 80.022,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 80.328,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 80.491,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 101.196,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 73.901,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 73.483,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 72.45,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 104.113,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 106.762,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 110.152,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 112.964,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 88.004,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 85.669,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 91.308,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 88.625,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 88.334,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 146.319,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 60.448,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 79.755,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 59.937,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 78.75,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 83.808,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 63.328,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 82.212,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 81.903,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 76.34,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 76.22,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 74.257,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 83.99,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 83.736,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 82.59,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 80.644,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 78.768,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 98.074,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 97.132,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 47.636,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 81.31,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 79.248,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 109.297,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 62.107,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 93.459,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 128.532,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 93.66,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 46.483,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 79.241,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 80.733,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 80.785,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 63.297,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 78.46,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 113.91,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 78.397,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 60.767,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 80.293,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 81.864,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 82.165,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 47.56,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 90.105,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 87.613,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 86.234,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 125.938,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 95.561,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 91.647,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 59.083,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 75.074,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 99.794,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 83.173,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 68.385,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 97.984,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 80.616,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 99.106,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 98.152,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 79.441,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 73.334,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 74.167,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 74.358,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 106.016,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 65.296,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 106.711,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 64.893,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 80.796,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 112.278,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 87.977,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 72.151,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 94.769,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 95.455,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 115.604,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 70.82,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 94.876,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 108.354,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 132.495,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 42.048,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 88.696,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 113.173,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 73.021,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 89.384,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 84.732,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 114.841,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 60.188,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 37.904,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 78.417,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 82.287,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 81.064,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 85.558,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 103.006,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 84.73,
           "reason": "granted"
         },
         {
@@ -409,1161 +1537,33 @@
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 89.083,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 81.65,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 104.298,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 64.052,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 62.978,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 90.944,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 130.344,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 93.369,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 69.761,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 83.089,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 80.753,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 80.843,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.056,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.769,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 68.478,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 88.539,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 82.794,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 84.386,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 69.788,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 49.612,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 102.256,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 62.545,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 118.569,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 80.876,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 75.15,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 75.751,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 74.769,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 77.531,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 76.762,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 57.98,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 91.802,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 70.397,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 89.901,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 69.51,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 55.909,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 82.806,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 84.192,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 64.599,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 109.46,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 83.529,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 108.661,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 64.575,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 82.067,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 99.265,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 63.403,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.927,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.896,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 92.534,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 56.548,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 54.782,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.776,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.94,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 80.015,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 95.754,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 82.487,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 81.979,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 100.209,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 68.467,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.796,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.804,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 95.974,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 77.213,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 86.983,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 86.836,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 89.88,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 92.751,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 85.482,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 67.776,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 76.389,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 74.349,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 54.571,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 87.743,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 81.497,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 82.062,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 82.281,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 49.291,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 96.889,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 77.188,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 57.961,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 76.049,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 82.377,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 82.174,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 118.167,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 81.878,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.231,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 63.951,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 90.738,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 75.376,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 56.254,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 80.396,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.925,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 96.302,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 96.622,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 45.166,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.444,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.256,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.815,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.659,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 88.172,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 122.474,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 69.956,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 68.974,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.145,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 71.233,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 71.306,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.864,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.837,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 89.687,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 54.45,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.183,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.519,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 89.411,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 54.416,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 67.859,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 75.96,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 78.346,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 78.37,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 46.115,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 83.559,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 80.745,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 120.518,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 83.979,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 110.783,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 67.496,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 90.492,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 54.709,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 96.172,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 83.25,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 124.725,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 105.004,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 98.518,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 67.631,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 62.731,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 76.13,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 69.452,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 70.805,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 71.133,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.613,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 101.389,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 64.581,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 81.891,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 85.164,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 75.218,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 76.462,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 75.809,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 74.537,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.773,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.525,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.694,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.04,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 80.941,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 78.978,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 113.428,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 43.274,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 70.556,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.118,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.074,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.196,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 80.533,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 81.291,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.921,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 76.715,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 75.885,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 84.62,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 56.789,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.687,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 115.014,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.413,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 52.002,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 81.428,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 81.637,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 81.62,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 81.198,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.362,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.542,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 108.017,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 63.665,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 76.257,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 83.138,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 83.399,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 74.193,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 92.886,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 92.654,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 82.291,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 116.05,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 87.092,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 71.356,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.983,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 32.591,
+          "latency_ms": 59.018,
           "reason": "granted"
         }
       ]
     },
     "load_50_meters": {
       "passed": true,
-      "seconds": 36.266,
+      "seconds": 43.297,
       "meter_count": 50,
       "demand_factor": 1.0,
       "settle_seconds": 10,
-      "headline_basis": "top-level latency fields are from the median trial by p50_ms (trial 3 of 5); see trials and summary",
+      "headline_basis": "top-level latency fields are from the median trial by p50_ms (trial 4 of 5); see trials and summary",
       "trials": [
         {
           "trial": 1,
-          "p50_ms": 79.151,
-          "p95_ms": 116.478,
-          "decisions_per_second": 49.369,
+          "p50_ms": 133.093,
+          "p95_ms": 235.803,
+          "decisions_per_second": 28.434,
           "all_decisions": {
             "count": 200,
-            "p50_ms": 79.151,
-            "p95_ms": 116.478
+            "p50_ms": 133.093,
+            "p95_ms": 235.803
           },
           "accepted": {
             "count": 200,
-            "p50_ms": 79.151,
-            "p95_ms": 116.478
+            "p50_ms": 133.093,
+            "p95_ms": 235.803
           },
           "rejected": {
             "count": 0,
@@ -1575,24 +1575,24 @@
             "p50_ms": null,
             "p95_ms": null
           },
-          "elapsed_seconds": 4.051,
-          "decision_requests_per_second": 49.369,
+          "elapsed_seconds": 7.034,
+          "decision_requests_per_second": 28.434,
           "measurement": "HTTP decision latency, including denied decisions; four concurrent clients"
         },
         {
           "trial": 2,
-          "p50_ms": 78.589,
-          "p95_ms": 113.586,
-          "decisions_per_second": 49.445,
+          "p50_ms": 87.076,
+          "p95_ms": 162.115,
+          "decisions_per_second": 40.117,
           "all_decisions": {
             "count": 200,
-            "p50_ms": 78.589,
-            "p95_ms": 113.586
+            "p50_ms": 87.076,
+            "p95_ms": 162.115
           },
           "accepted": {
             "count": 200,
-            "p50_ms": 78.589,
-            "p95_ms": 113.586
+            "p50_ms": 87.076,
+            "p95_ms": 162.115
           },
           "rejected": {
             "count": 0,
@@ -1604,24 +1604,24 @@
             "p50_ms": null,
             "p95_ms": null
           },
-          "elapsed_seconds": 4.045,
-          "decision_requests_per_second": 49.445,
+          "elapsed_seconds": 4.985,
+          "decision_requests_per_second": 40.117,
           "measurement": "HTTP decision latency, including denied decisions; four concurrent clients"
         },
         {
           "trial": 3,
-          "p50_ms": 78.263,
-          "p95_ms": 112.366,
-          "decisions_per_second": 50.34,
+          "p50_ms": 89.797,
+          "p95_ms": 139.652,
+          "decisions_per_second": 42.227,
           "all_decisions": {
             "count": 200,
-            "p50_ms": 78.263,
-            "p95_ms": 112.366
+            "p50_ms": 89.797,
+            "p95_ms": 139.652
           },
           "accepted": {
             "count": 200,
-            "p50_ms": 78.263,
-            "p95_ms": 112.366
+            "p50_ms": 89.797,
+            "p95_ms": 139.652
           },
           "rejected": {
             "count": 0,
@@ -1633,24 +1633,24 @@
             "p50_ms": null,
             "p95_ms": null
           },
-          "elapsed_seconds": 3.973,
-          "decision_requests_per_second": 50.34,
+          "elapsed_seconds": 4.736,
+          "decision_requests_per_second": 42.227,
           "measurement": "HTTP decision latency, including denied decisions; four concurrent clients"
         },
         {
           "trial": 4,
-          "p50_ms": 77.912,
-          "p95_ms": 110.896,
-          "decisions_per_second": 50.55,
+          "p50_ms": 92.541,
+          "p95_ms": 159.971,
+          "decisions_per_second": 39.23,
           "all_decisions": {
             "count": 200,
-            "p50_ms": 77.912,
-            "p95_ms": 110.896
+            "p50_ms": 92.541,
+            "p95_ms": 159.971
           },
           "accepted": {
             "count": 200,
-            "p50_ms": 77.912,
-            "p95_ms": 110.896
+            "p50_ms": 92.541,
+            "p95_ms": 159.971
           },
           "rejected": {
             "count": 0,
@@ -1662,24 +1662,24 @@
             "p50_ms": null,
             "p95_ms": null
           },
-          "elapsed_seconds": 3.956,
-          "decision_requests_per_second": 50.55,
+          "elapsed_seconds": 5.098,
+          "decision_requests_per_second": 39.23,
           "measurement": "HTTP decision latency, including denied decisions; four concurrent clients"
         },
         {
           "trial": 5,
-          "p50_ms": 77.733,
-          "p95_ms": 111.195,
-          "decisions_per_second": 50.29,
+          "p50_ms": 96.609,
+          "p95_ms": 137.434,
+          "decisions_per_second": 39.971,
           "all_decisions": {
             "count": 200,
-            "p50_ms": 77.733,
-            "p95_ms": 111.195
+            "p50_ms": 96.609,
+            "p95_ms": 137.434
           },
           "accepted": {
             "count": 200,
-            "p50_ms": 77.733,
-            "p95_ms": 111.195
+            "p50_ms": 96.609,
+            "p95_ms": 137.434
           },
           "rejected": {
             "count": 0,
@@ -1691,43 +1691,43 @@
             "p50_ms": null,
             "p95_ms": null
           },
-          "elapsed_seconds": 3.977,
-          "decision_requests_per_second": 50.29,
+          "elapsed_seconds": 5.004,
+          "decision_requests_per_second": 39.971,
           "measurement": "HTTP decision latency, including denied decisions; four concurrent clients"
         }
       ],
       "summary": {
         "p50_ms": {
           "n": 5,
-          "mean": 78.33,
-          "stdev": 0.565,
-          "min": 77.733,
-          "max": 79.151
+          "mean": 99.823,
+          "stdev": 18.929,
+          "min": 87.076,
+          "max": 133.093
         },
         "p95_ms": {
           "n": 5,
-          "mean": 112.904,
-          "stdev": 2.263,
-          "min": 110.896,
-          "max": 116.478
+          "mean": 166.995,
+          "stdev": 40.091,
+          "min": 137.434,
+          "max": 235.803
         },
         "decisions_per_second": {
           "n": 5,
-          "mean": 49.999,
-          "stdev": 0.55,
-          "min": 49.369,
-          "max": 50.55
+          "mean": 37.996,
+          "stdev": 5.46,
+          "min": 28.434,
+          "max": 42.227
         }
       },
       "all_decisions": {
         "count": 200,
-        "p50_ms": 78.263,
-        "p95_ms": 112.366
+        "p50_ms": 92.541,
+        "p95_ms": 159.971
       },
       "accepted": {
         "count": 200,
-        "p50_ms": 78.263,
-        "p95_ms": 112.366
+        "p50_ms": 92.541,
+        "p95_ms": 159.971
       },
       "rejected": {
         "count": 0,
@@ -1739,1993 +1739,68 @@
         "p50_ms": null,
         "p95_ms": null
       },
-      "elapsed_seconds": 3.973,
-      "decision_requests_per_second": 50.34,
+      "elapsed_seconds": 5.098,
+      "decision_requests_per_second": 39.23,
       "measurement": "HTTP decision latency, including denied decisions; four concurrent clients",
       "gateway_meter_count": 50,
-      "reading_observation_seconds": 5.188,
-      "gateway_readings_delta": 300,
-      "gateway_readings_per_second": 57.826,
-      "sql_readings_delta": 283,
-      "served_amps_at_end": 76.544,
+      "reading_observation_seconds": 5.171,
+      "gateway_readings_delta": 250,
+      "gateway_readings_per_second": 48.347,
+      "sql_readings_delta": 284,
+      "served_amps_at_end": 80.285,
       "responses": [
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 95.486,
+          "latency_ms": 79.213,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 95.594,
+          "latency_ms": 98.445,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 47.072,
+          "latency_ms": 64.085,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 44.278,
+          "latency_ms": 84.077,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 79.824,
+          "latency_ms": 83.159,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 80.18,
+          "latency_ms": 83.127,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 80.258,
+          "latency_ms": 83.102,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 114.765,
+          "latency_ms": 85.389,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 72.077,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 74.252,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 109.69,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 39.902,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 76.802,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 56.621,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 91.871,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 84.407,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 84.351,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 82.82,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 75.042,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 80.061,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 93.176,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 92.087,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 51.58,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 78.393,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.378,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 65.751,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 65.733,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 116.663,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 135.542,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 78.948,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 97.488,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 89.78,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 90.785,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 90.334,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 78.786,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 82.554,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 83.253,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 83.324,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 93.466,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 74.236,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 54.827,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 87.999,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 98.129,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 61.592,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.515,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 80.104,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 71.515,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 53.533,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 89.822,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.814,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 55.228,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 90.029,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 71.624,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 91.293,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 90.4,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 36.239,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.4,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.581,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 80.09,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.415,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.234,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 89.018,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 52.538,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 87.603,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 96.352,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 60.619,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 95.61,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 60.783,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 69.822,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 68.604,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 68.717,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 87.968,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 51.998,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 75.687,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 57.308,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 40.642,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 80.562,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 111.268,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 77.897,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 77.154,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 87.183,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 85.536,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 119.084,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 51.851,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 78.845,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 102.5,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 61.182,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 106.137,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 101.362,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 101.276,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 96.149,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 76.166,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 54.313,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 86.264,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.414,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.192,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.935,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 74.522,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.554,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.23,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.16,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 75.623,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.253,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 67.988,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 90.427,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.289,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 88.756,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 58.051,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 53.336,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 78.133,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.355,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 62.225,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 89.073,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 105.372,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 87.581,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 61.485,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 94.839,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 80.125,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 55.768,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 90.831,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 75.481,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 84.309,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 54.997,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.642,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 78.605,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 112.49,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 50.371,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.724,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.171,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.134,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 71.564,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 70.787,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 97.206,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 78.018,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 70.017,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 44.438,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 71.249,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.976,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 90.194,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.999,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 113.291,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 114.879,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 133.255,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 116.019,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 91.51,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 87.657,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 69.375,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 112.359,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 97.033,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 62.148,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 95.971,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 71.225,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 70.957,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 53.325,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 70.415,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 81.003,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 82.819,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 117.326,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 47.899,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 74.018,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 54.715,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 91.32,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 74.839,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 65.596,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 92.392,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 74.696,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 76.482,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 65.981,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 77.624,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 77.523,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 111.075,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 76.001,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 38.081,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.974,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 53.611,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 89.115,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 74.176,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 75.44,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 75.308,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 74.557,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 74.067,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 88.841,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 53.753,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.653,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 91.404,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.059,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.834,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 87.01,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 86.297,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 69.094,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 52.947,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 82.943,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 103.043,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 101.853,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 82.413,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 66.462,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 71.693,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 80.424,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 57.868,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 52.796,
-          "reason": "granted"
-        }
-      ]
-    },
-    "load_200_meters": {
-      "passed": true,
-      "seconds": 36.734,
-      "meter_count": 200,
-      "demand_factor": 1.0,
-      "settle_seconds": 10,
-      "headline_basis": "top-level latency fields are from the median trial by p50_ms (trial 1 of 5); see trials and summary",
-      "trials": [
-        {
-          "trial": 1,
-          "p50_ms": 79.404,
-          "p95_ms": 114.046,
-          "decisions_per_second": 48.777,
-          "all_decisions": {
-            "count": 200,
-            "p50_ms": 79.404,
-            "p95_ms": 114.046
-          },
-          "accepted": {
-            "count": 200,
-            "p50_ms": 79.404,
-            "p95_ms": 114.046
-          },
-          "rejected": {
-            "count": 0,
-            "p50_ms": null,
-            "p95_ms": null
-          },
-          "transport_or_http_errors": {
-            "count": 0,
-            "p50_ms": null,
-            "p95_ms": null
-          },
-          "elapsed_seconds": 4.1,
-          "decision_requests_per_second": 48.777,
-          "measurement": "HTTP decision latency, including denied decisions; four concurrent clients"
-        },
-        {
-          "trial": 2,
-          "p50_ms": 77.13,
-          "p95_ms": 116.352,
-          "decisions_per_second": 48.966,
-          "all_decisions": {
-            "count": 200,
-            "p50_ms": 77.13,
-            "p95_ms": 116.352
-          },
-          "accepted": {
-            "count": 200,
-            "p50_ms": 77.13,
-            "p95_ms": 116.352
-          },
-          "rejected": {
-            "count": 0,
-            "p50_ms": null,
-            "p95_ms": null
-          },
-          "transport_or_http_errors": {
-            "count": 0,
-            "p50_ms": null,
-            "p95_ms": null
-          },
-          "elapsed_seconds": 4.084,
-          "decision_requests_per_second": 48.966,
-          "measurement": "HTTP decision latency, including denied decisions; four concurrent clients"
-        },
-        {
-          "trial": 3,
-          "p50_ms": 79.3,
-          "p95_ms": 112.002,
-          "decisions_per_second": 48.912,
-          "all_decisions": {
-            "count": 200,
-            "p50_ms": 79.3,
-            "p95_ms": 112.002
-          },
-          "accepted": {
-            "count": 200,
-            "p50_ms": 79.3,
-            "p95_ms": 112.002
-          },
-          "rejected": {
-            "count": 0,
-            "p50_ms": null,
-            "p95_ms": null
-          },
-          "transport_or_http_errors": {
-            "count": 0,
-            "p50_ms": null,
-            "p95_ms": null
-          },
-          "elapsed_seconds": 4.089,
-          "decision_requests_per_second": 48.912,
-          "measurement": "HTTP decision latency, including denied decisions; four concurrent clients"
-        },
-        {
-          "trial": 4,
-          "p50_ms": 80.576,
-          "p95_ms": 119.194,
-          "decisions_per_second": 48.248,
-          "all_decisions": {
-            "count": 200,
-            "p50_ms": 80.576,
-            "p95_ms": 119.194
-          },
-          "accepted": {
-            "count": 200,
-            "p50_ms": 80.576,
-            "p95_ms": 119.194
-          },
-          "rejected": {
-            "count": 0,
-            "p50_ms": null,
-            "p95_ms": null
-          },
-          "transport_or_http_errors": {
-            "count": 0,
-            "p50_ms": null,
-            "p95_ms": null
-          },
-          "elapsed_seconds": 4.145,
-          "decision_requests_per_second": 48.248,
-          "measurement": "HTTP decision latency, including denied decisions; four concurrent clients"
-        },
-        {
-          "trial": 5,
-          "p50_ms": 80.644,
-          "p95_ms": 109.06,
-          "decisions_per_second": 48.313,
-          "all_decisions": {
-            "count": 200,
-            "p50_ms": 80.644,
-            "p95_ms": 109.06
-          },
-          "accepted": {
-            "count": 200,
-            "p50_ms": 80.644,
-            "p95_ms": 109.06
-          },
-          "rejected": {
-            "count": 0,
-            "p50_ms": null,
-            "p95_ms": null
-          },
-          "transport_or_http_errors": {
-            "count": 0,
-            "p50_ms": null,
-            "p95_ms": null
-          },
-          "elapsed_seconds": 4.14,
-          "decision_requests_per_second": 48.313,
-          "measurement": "HTTP decision latency, including denied decisions; four concurrent clients"
-        }
-      ],
-      "summary": {
-        "p50_ms": {
-          "n": 5,
-          "mean": 79.411,
-          "stdev": 1.422,
-          "min": 77.13,
-          "max": 80.644
-        },
-        "p95_ms": {
-          "n": 5,
-          "mean": 114.131,
-          "stdev": 3.899,
-          "min": 109.06,
-          "max": 119.194
-        },
-        "decisions_per_second": {
-          "n": 5,
-          "mean": 48.643,
-          "stdev": 0.339,
-          "min": 48.248,
-          "max": 48.966
-        }
-      },
-      "all_decisions": {
-        "count": 200,
-        "p50_ms": 79.404,
-        "p95_ms": 114.046
-      },
-      "accepted": {
-        "count": 200,
-        "p50_ms": 79.404,
-        "p95_ms": 114.046
-      },
-      "rejected": {
-        "count": 0,
-        "p50_ms": null,
-        "p95_ms": null
-      },
-      "transport_or_http_errors": {
-        "count": 0,
-        "p50_ms": null,
-        "p95_ms": null
-      },
-      "elapsed_seconds": 4.1,
-      "decision_requests_per_second": 48.777,
-      "measurement": "HTTP decision latency, including denied decisions; four concurrent clients",
-      "gateway_meter_count": 200,
-      "reading_observation_seconds": 5.156,
-      "gateway_readings_delta": 1000,
-      "gateway_readings_per_second": 193.949,
-      "sql_readings_delta": 1066,
-      "served_amps_at_end": 96.38300000000001,
-      "responses": [
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 98.508,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 138.303,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 55.019,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 50.861,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 78.547,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 60.652,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 78.488,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 85.926,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 85.948,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 85.086,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 103.213,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 111.035,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 111.686,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 71.093,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 55.695,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 92.007,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 92.402,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 126.752,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 71.285,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.304,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.211,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 77.93,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 77.112,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 94.992,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 93.619,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 113.134,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 98.093,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 56.11,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.353,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 85.991,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 85.409,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 84.562,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 84.795,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 78.583,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.978,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.9,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 80.322,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 82.905,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 84.079,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 122.755,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 48.569,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 87.984,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 89.574,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 89.729,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 51.213,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 140.345,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 85.318,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 65.946,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 83.877,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 81.639,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 85.916,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 85.713,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 85.958,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 76.496,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 71.864,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 96.178,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 80.246,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 61.408,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.325,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.919,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 74.63,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 74.581,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.728,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.588,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.963,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.997,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 73.391,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 72.594,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 71.502,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 70.766,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 71.766,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 81.311,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 63.001,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 62.287,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 86.049,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 76.194,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 96.684,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 114.198,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 56.718,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 102.497,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 80.822,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 98.727,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 98.306,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 84.317,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 101.722,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 108.766,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 66.216,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 80.072,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 98.263,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 62.287,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.534,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 79.482,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 112.636,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 43.005,
-          "reason": "granted"
-        },
-        {
-          "accepted": true,
-          "status": 200,
-          "latency_ms": 78.91,
+          "latency_ms": 79.812,
           "reason": "granted"
         },
         {
@@ -3737,632 +1812,2557 @@
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 79.266,
+          "latency_ms": 60.238,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 45.924,
+          "latency_ms": 82.57,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 78.963,
+          "latency_ms": 120.802,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 77.904,
+          "latency_ms": 80.129,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 111.747,
+          "latency_ms": 61.514,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 76.439,
+          "latency_ms": 79.298,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 68.171,
+          "latency_ms": 96.256,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 72.072,
+          "latency_ms": 58.92,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 71.81,
+          "latency_ms": 81.828,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 73.518,
+          "latency_ms": 82.97,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 76.506,
+          "latency_ms": 83.505,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 54.947,
+          "latency_ms": 88.252,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 97.048,
+          "latency_ms": 82.786,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 79.85,
+          "latency_ms": 81.839,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 90.651,
+          "latency_ms": 99.536,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 62.079,
+          "latency_ms": 77.844,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 77.663,
+          "latency_ms": 74.334,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 80.071,
+          "latency_ms": 71.341,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 114.038,
+          "latency_ms": 85.387,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 50.446,
+          "latency_ms": 97.014,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 75.087,
+          "latency_ms": 97.924,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 72.675,
+          "latency_ms": 103.942,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 72.341,
+          "latency_ms": 90.844,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 73.04,
+          "latency_ms": 58.833,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 74.145,
+          "latency_ms": 84.773,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 82.082,
+          "latency_ms": 84.361,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 81.082,
+          "latency_ms": 84.619,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 86.645,
+          "latency_ms": 105.569,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 67.252,
+          "latency_ms": 61.987,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 88.516,
+          "latency_ms": 79.742,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 106.215,
+          "latency_ms": 80.382,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 100.657,
+          "latency_ms": 81.871,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 64.367,
+          "latency_ms": 81.086,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 104.342,
+          "latency_ms": 82.705,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 55.683,
+          "latency_ms": 84.97,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 55.432,
+          "latency_ms": 82.268,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 117.013,
+          "latency_ms": 81.378,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 129.497,
+          "latency_ms": 78.426,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 71.068,
+          "latency_ms": 78.191,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 66.492,
+          "latency_ms": 81.241,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 107.629,
+          "latency_ms": 80.087,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 100.46,
+          "latency_ms": 97.638,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 135.85,
+          "latency_ms": 98.967,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 67.945,
+          "latency_ms": 78.462,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 72.564,
+          "latency_ms": 77.344,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 92.863,
+          "latency_ms": 116.662,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 54.666,
+          "latency_ms": 70.904,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 105.001,
+          "latency_ms": 93.432,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 66.747,
+          "latency_ms": 133.369,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 86.623,
+          "latency_ms": 123.409,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 84.265,
+          "latency_ms": 61.321,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 74.052,
+          "latency_ms": 82.103,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 73.464,
+          "latency_ms": 60.846,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 72.413,
+          "latency_ms": 108.755,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 83.223,
+          "latency_ms": 88.013,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 84.421,
+          "latency_ms": 120.869,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 65.141,
+          "latency_ms": 47.756,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 99.472,
+          "latency_ms": 93.403,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 101.703,
+          "latency_ms": 93.028,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 83.478,
+          "latency_ms": 129.102,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 63.062,
+          "latency_ms": 42.089,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 87.155,
+          "latency_ms": 91.444,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 81.014,
+          "latency_ms": 129.399,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 81.731,
+          "latency_ms": 90.408,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 80.716,
+          "latency_ms": 53.981,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 82.36,
+          "latency_ms": 77.672,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 77.735,
+          "latency_ms": 82.349,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 78.613,
+          "latency_ms": 82.495,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 77.884,
+          "latency_ms": 131.876,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 74.915,
+          "latency_ms": 114.864,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 76.011,
+          "latency_ms": 107.149,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 56.337,
+          "latency_ms": 169.812,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 89.605,
+          "latency_ms": 108.037,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 104.344,
+          "latency_ms": 106.875,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 67.344,
+          "latency_ms": 90.144,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 118.93,
+          "latency_ms": 92.042,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 51.615,
+          "latency_ms": 86.783,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 68.935,
+          "latency_ms": 104.268,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 69.123,
+          "latency_ms": 103.181,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 77.687,
+          "latency_ms": 122.703,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 53.687,
+          "latency_ms": 63.478,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 72.01,
+          "latency_ms": 63.813,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 72.146,
+          "latency_ms": 83.234,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 72.791,
+          "latency_ms": 76.444,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 91.061,
+          "latency_ms": 79.254,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 78.218,
+          "latency_ms": 77.945,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 59.11,
+          "latency_ms": 77.914,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 84.563,
+          "latency_ms": 88.284,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 84.096,
+          "latency_ms": 87.969,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 104.719,
+          "latency_ms": 69.774,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 103.356,
+          "latency_ms": 111.771,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 44.792,
+          "latency_ms": 107.609,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 94.703,
+          "latency_ms": 63.213,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 114.758,
+          "latency_ms": 87.565,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 90.785,
+          "latency_ms": 82.948,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 71.266,
+          "latency_ms": 94.188,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 80.721,
+          "latency_ms": 93.196,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 82.352,
+          "latency_ms": 141.659,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 64.539,
+          "latency_ms": 53.675,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 105.324,
+          "latency_ms": 103.297,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 80.322,
+          "latency_ms": 103.036,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 68.227,
+          "latency_ms": 103.297,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 59.16,
+          "latency_ms": 54.516,
           "reason": "granted"
         },
         {
           "accepted": true,
           "status": 200,
-          "latency_ms": 30.822,
+          "latency_ms": 89.82,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 88.985,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 124.802,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 87.937,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 106.954,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 66.891,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 85.152,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 49.689,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 80.612,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 83.181,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 114.578,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 81.875,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 91.897,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 92.944,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 93.571,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 61.018,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 90.982,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 92.833,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 143.279,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 92.25,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 155.265,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 179.683,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 130.704,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 127.639,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 104.743,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 126.283,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 79.969,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 119.095,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 84.181,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 101.442,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 62.584,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 81.391,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 93.749,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 81.191,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 72.648,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 95.818,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 99.255,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 88.72,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 69.866,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 111.776,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 115.587,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 114.615,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 113.335,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 107.88,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 102.064,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 160.497,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 100.684,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 107.85,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 133.422,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 84.983,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 114.986,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 128.716,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 127.86,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 79.719,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 145.64,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 134.849,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 133.795,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 172.979,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 143.792,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 150.984,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 150.79,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 112.261,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 233.412,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 255.76,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 168.53,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 198.64,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 117.481,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 120.572,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 118.965,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 63.112,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 136.681,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 140.455,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 138.998,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 139.0,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 132.703,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 214.907,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 191.94,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 157.8,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 94.771,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 126.973,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 125.519,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 146.294,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 104.117,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 159.943,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 133.926,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 146.825,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 121.369,
+          "reason": "granted"
+        }
+      ]
+    },
+    "load_200_meters": {
+      "passed": true,
+      "seconds": 44.516,
+      "meter_count": 200,
+      "demand_factor": 1.0,
+      "settle_seconds": 10,
+      "headline_basis": "top-level latency fields are from the median trial by p50_ms (trial 2 of 5); see trials and summary",
+      "trials": [
+        {
+          "trial": 1,
+          "p50_ms": 94.873,
+          "p95_ms": 137.629,
+          "decisions_per_second": 40.653,
+          "all_decisions": {
+            "count": 200,
+            "p50_ms": 94.873,
+            "p95_ms": 137.629
+          },
+          "accepted": {
+            "count": 200,
+            "p50_ms": 94.873,
+            "p95_ms": 137.629
+          },
+          "rejected": {
+            "count": 0,
+            "p50_ms": null,
+            "p95_ms": null
+          },
+          "transport_or_http_errors": {
+            "count": 0,
+            "p50_ms": null,
+            "p95_ms": null
+          },
+          "elapsed_seconds": 4.92,
+          "decision_requests_per_second": 40.653,
+          "measurement": "HTTP decision latency, including denied decisions; four concurrent clients"
+        },
+        {
+          "trial": 2,
+          "p50_ms": 100.768,
+          "p95_ms": 165.42,
+          "decisions_per_second": 37.297,
+          "all_decisions": {
+            "count": 200,
+            "p50_ms": 100.768,
+            "p95_ms": 165.42
+          },
+          "accepted": {
+            "count": 200,
+            "p50_ms": 100.768,
+            "p95_ms": 165.42
+          },
+          "rejected": {
+            "count": 0,
+            "p50_ms": null,
+            "p95_ms": null
+          },
+          "transport_or_http_errors": {
+            "count": 0,
+            "p50_ms": null,
+            "p95_ms": null
+          },
+          "elapsed_seconds": 5.362,
+          "decision_requests_per_second": 37.297,
+          "measurement": "HTTP decision latency, including denied decisions; four concurrent clients"
+        },
+        {
+          "trial": 3,
+          "p50_ms": 129.984,
+          "p95_ms": 182.091,
+          "decisions_per_second": 30.019,
+          "all_decisions": {
+            "count": 200,
+            "p50_ms": 129.984,
+            "p95_ms": 182.091
+          },
+          "accepted": {
+            "count": 200,
+            "p50_ms": 129.984,
+            "p95_ms": 182.091
+          },
+          "rejected": {
+            "count": 0,
+            "p50_ms": null,
+            "p95_ms": null
+          },
+          "transport_or_http_errors": {
+            "count": 0,
+            "p50_ms": null,
+            "p95_ms": null
+          },
+          "elapsed_seconds": 6.662,
+          "decision_requests_per_second": 30.019,
+          "measurement": "HTTP decision latency, including denied decisions; four concurrent clients"
+        },
+        {
+          "trial": 4,
+          "p50_ms": 120.019,
+          "p95_ms": 172.399,
+          "decisions_per_second": 31.884,
+          "all_decisions": {
+            "count": 200,
+            "p50_ms": 120.019,
+            "p95_ms": 172.399
+          },
+          "accepted": {
+            "count": 200,
+            "p50_ms": 120.019,
+            "p95_ms": 172.399
+          },
+          "rejected": {
+            "count": 0,
+            "p50_ms": null,
+            "p95_ms": null
+          },
+          "transport_or_http_errors": {
+            "count": 0,
+            "p50_ms": null,
+            "p95_ms": null
+          },
+          "elapsed_seconds": 6.273,
+          "decision_requests_per_second": 31.884,
+          "measurement": "HTTP decision latency, including denied decisions; four concurrent clients"
+        },
+        {
+          "trial": 5,
+          "p50_ms": 91.798,
+          "p95_ms": 126.037,
+          "decisions_per_second": 42.331,
+          "all_decisions": {
+            "count": 200,
+            "p50_ms": 91.798,
+            "p95_ms": 126.037
+          },
+          "accepted": {
+            "count": 200,
+            "p50_ms": 91.798,
+            "p95_ms": 126.037
+          },
+          "rejected": {
+            "count": 0,
+            "p50_ms": null,
+            "p95_ms": null
+          },
+          "transport_or_http_errors": {
+            "count": 0,
+            "p50_ms": null,
+            "p95_ms": null
+          },
+          "elapsed_seconds": 4.725,
+          "decision_requests_per_second": 42.331,
+          "measurement": "HTTP decision latency, including denied decisions; four concurrent clients"
+        }
+      ],
+      "summary": {
+        "p50_ms": {
+          "n": 5,
+          "mean": 107.488,
+          "stdev": 16.685,
+          "min": 91.798,
+          "max": 129.984
+        },
+        "p95_ms": {
+          "n": 5,
+          "mean": 156.715,
+          "stdev": 23.828,
+          "min": 126.037,
+          "max": 182.091
+        },
+        "decisions_per_second": {
+          "n": 5,
+          "mean": 36.437,
+          "stdev": 5.366,
+          "min": 30.019,
+          "max": 42.331
+        }
+      },
+      "all_decisions": {
+        "count": 200,
+        "p50_ms": 100.768,
+        "p95_ms": 165.42
+      },
+      "accepted": {
+        "count": 200,
+        "p50_ms": 100.768,
+        "p95_ms": 165.42
+      },
+      "rejected": {
+        "count": 0,
+        "p50_ms": null,
+        "p95_ms": null
+      },
+      "transport_or_http_errors": {
+        "count": 0,
+        "p50_ms": null,
+        "p95_ms": null
+      },
+      "elapsed_seconds": 5.362,
+      "decision_requests_per_second": 37.297,
+      "measurement": "HTTP decision latency, including denied decisions; four concurrent clients",
+      "gateway_meter_count": 200,
+      "reading_observation_seconds": 5.218,
+      "gateway_readings_delta": 1000,
+      "gateway_readings_per_second": 191.644,
+      "sql_readings_delta": 1133,
+      "served_amps_at_end": 93.74200000000005,
+      "responses": [
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 114.189,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 138.017,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 110.479,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 63.148,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 158.206,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 134.318,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 189.311,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 101.3,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 120.412,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 125.042,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 124.835,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 130.292,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 130.381,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 93.396,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 93.987,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 142.697,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 141.551,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 152.866,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 152.911,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 133.278,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 129.745,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 153.744,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 117.564,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 130.903,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 135.572,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 135.705,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 100.268,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 131.01,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 131.808,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 238.941,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 130.434,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 165.363,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 154.195,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 153.369,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 92.873,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 86.306,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 87.169,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 86.16,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 79.206,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 80.222,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 59.224,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 129.482,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 117.195,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 131.956,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 131.077,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 61.523,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 134.719,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 134.837,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 196.007,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 133.085,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 126.391,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 123.7,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 122.419,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 108.467,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 102.449,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 98.278,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 98.333,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 101.892,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 108.405,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 95.195,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 83.198,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 185.661,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 127.811,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 99.907,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 64.251,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 77.866,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 54.109,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 99.689,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 95.727,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 95.881,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 131.969,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 81.258,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 77.6,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 98.864,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 113.843,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 125.088,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 146.757,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 103.666,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 105.114,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 98.19,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 79.752,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 100.815,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 97.882,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 93.393,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 93.573,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 102.209,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 94.454,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 72.163,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 104.301,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 94.044,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 93.69,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 92.907,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 91.427,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 84.719,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 93.27,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 83.582,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 89.932,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 56.125,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 99.313,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 67.186,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 94.419,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 62.536,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 91.421,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 87.827,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 87.796,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 95.536,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 79.195,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 216.348,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 179.988,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 176.877,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 155.424,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 113.498,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 101.253,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 101.02,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 100.279,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 90.776,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 167.651,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 142.275,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 166.51,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 99.945,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 106.453,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 119.663,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 119.9,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 80.103,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 88.958,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 109.357,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 109.598,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 71.57,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 89.455,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 91.618,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 92.03,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 54.276,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 101.628,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 129.984,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 101.629,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 100.721,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 105.519,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 62.499,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 82.244,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 54.012,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 84.152,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 84.626,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 84.509,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 120.673,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 75.248,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 73.816,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 93.176,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 57.099,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 76.178,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 77.748,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 84.762,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 105.805,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 67.725,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 60.698,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 99.884,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 100.132,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 119.264,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 87.561,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 129.281,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 140.857,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 165.302,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 55.313,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 90.457,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 100.824,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 91.208,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 107.569,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 66.678,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 120.008,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 65.753,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 64.62,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 112.29,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 109.274,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 135.073,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 104.591,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 83.424,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 97.098,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 92.434,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 130.387,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 56.246,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 80.443,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 79.737,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 93.313,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 55.559,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 110.287,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 121.794,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 106.896,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 142.756,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 139.107,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 138.157,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 168.672,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 101.023,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 106.392,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 99.122,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 99.031,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 102.595,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 112.925,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 66.486,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 89.734,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 55.825,
+          "reason": "granted"
+        },
+        {
+          "accepted": true,
+          "status": 200,
+          "latency_ms": 35.149,
           "reason": "granted"
         }
       ]
     },
     "concurrency_sweep": {
       "passed": true,
-      "seconds": 29.891,
+      "seconds": 31.031,
       "meter_count": 50,
       "requests_per_level": 200,
       "settle_seconds": 10,
@@ -4375,31 +4375,31 @@
       "levels": [
         {
           "workers": 1,
-          "p50_ms": 38.748,
-          "p95_ms": 54.844,
-          "decisions_per_second": 25.85,
+          "p50_ms": 35.947,
+          "p95_ms": 53.667,
+          "decisions_per_second": 26.025,
           "all_decisions": {
             "count": 200,
-            "p50_ms": 38.748,
-            "p95_ms": 54.844
+            "p50_ms": 35.947,
+            "p95_ms": 53.667
           },
           "accepted": {
-            "count": 200,
-            "p50_ms": 38.748,
-            "p95_ms": 54.844
+            "count": 81,
+            "p50_ms": 40.691,
+            "p95_ms": 56.207
           },
           "rejected": {
-            "count": 0,
-            "p50_ms": null,
-            "p95_ms": null
+            "count": 119,
+            "p50_ms": 32.685,
+            "p95_ms": 53.551
           },
           "transport_or_http_errors": {
             "count": 0,
             "p50_ms": null,
             "p95_ms": null
           },
-          "elapsed_seconds": 7.737,
-          "decision_requests_per_second": 25.85,
+          "elapsed_seconds": 7.685,
+          "decision_requests_per_second": 26.025,
           "measurement": "HTTP decision latency, including denied decisions; 1 concurrent client",
           "non_200": {
             "count": 0,
@@ -4407,22 +4407,24 @@
             "unknown_outcomes": 0,
             "note": "status 0 = transport error/timeout; outcome unknown, not a rejection"
           },
-          "rejection_reasons": {}
+          "rejection_reasons": {
+            "capacity_exhausted": 119
+          }
         },
         {
           "workers": 4,
-          "p50_ms": 82.072,
-          "p95_ms": 125.2,
-          "decisions_per_second": 46.757,
+          "p50_ms": 86.934,
+          "p95_ms": 140.568,
+          "decisions_per_second": 42.704,
           "all_decisions": {
             "count": 200,
-            "p50_ms": 82.072,
-            "p95_ms": 125.2
+            "p50_ms": 86.934,
+            "p95_ms": 140.568
           },
           "accepted": {
             "count": 200,
-            "p50_ms": 82.072,
-            "p95_ms": 125.2
+            "p50_ms": 86.934,
+            "p95_ms": 140.568
           },
           "rejected": {
             "count": 0,
@@ -4434,8 +4436,8 @@
             "p50_ms": null,
             "p95_ms": null
           },
-          "elapsed_seconds": 4.277,
-          "decision_requests_per_second": 46.757,
+          "elapsed_seconds": 4.683,
+          "decision_requests_per_second": 42.704,
           "measurement": "HTTP decision latency, including denied decisions; four concurrent clients",
           "non_200": {
             "count": 0,
@@ -4447,18 +4449,18 @@
         },
         {
           "workers": 16,
-          "p50_ms": 275.585,
-          "p95_ms": 437.039,
-          "decisions_per_second": 52.69,
+          "p50_ms": 308.101,
+          "p95_ms": 485.065,
+          "decisions_per_second": 47.455,
           "all_decisions": {
             "count": 200,
-            "p50_ms": 275.585,
-            "p95_ms": 437.039
+            "p50_ms": 308.101,
+            "p95_ms": 485.065
           },
           "accepted": {
             "count": 200,
-            "p50_ms": 275.585,
-            "p95_ms": 437.039
+            "p50_ms": 308.101,
+            "p95_ms": 485.065
           },
           "rejected": {
             "count": 0,
@@ -4470,8 +4472,8 @@
             "p50_ms": null,
             "p95_ms": null
           },
-          "elapsed_seconds": 3.796,
-          "decision_requests_per_second": 52.69,
+          "elapsed_seconds": 4.214,
+          "decision_requests_per_second": 47.455,
           "measurement": "HTTP decision latency, including denied decisions; 16 concurrent clients",
           "non_200": {
             "count": 0,
@@ -4483,18 +4485,18 @@
         },
         {
           "workers": 64,
-          "p50_ms": 300.584,
-          "p95_ms": 517.333,
-          "decisions_per_second": 51.545,
+          "p50_ms": 336.289,
+          "p95_ms": 603.189,
+          "decisions_per_second": 47.325,
           "all_decisions": {
             "count": 200,
-            "p50_ms": 300.584,
-            "p95_ms": 517.333
+            "p50_ms": 336.289,
+            "p95_ms": 603.189
           },
           "accepted": {
             "count": 200,
-            "p50_ms": 300.584,
-            "p95_ms": 517.333
+            "p50_ms": 336.289,
+            "p95_ms": 603.189
           },
           "rejected": {
             "count": 0,
@@ -4506,8 +4508,8 @@
             "p50_ms": null,
             "p95_ms": null
           },
-          "elapsed_seconds": 3.88,
-          "decision_requests_per_second": 51.545,
+          "elapsed_seconds": 4.226,
+          "decision_requests_per_second": 47.325,
           "measurement": "HTTP decision latency, including denied decisions; 64 concurrent clients",
           "non_200": {
             "count": 0,
@@ -4522,73 +4524,89 @@
     },
     "end_to_end_latency": {
       "passed": true,
-      "seconds": 59.125,
+      "seconds": 59.172,
       "meter_count": 50,
       "low_demand_factor": 0.5,
       "high_demand_factor": 1.0,
-      "calibrated_high_demand_amps": 78.17,
+      "calibrated_high_demand_amps": 77.536,
       "samples": [
         {
           "sample": 1,
-          "baseline_demand_amps": 40.192,
-          "demand_change_ms": 384.683,
-          "served_change_ms": 384.683,
-          "polls": 3,
-          "move_threshold_amps": 3.798
+          "baseline_demand_amps": 37.943,
+          "demand_change_ms": 530.412,
+          "served_change_ms": 530.412,
+          "polls": 4,
+          "move_threshold_amps": 3.959
         },
         {
           "sample": 2,
-          "baseline_demand_amps": 39.022,
-          "demand_change_ms": 827.469,
-          "served_change_ms": 827.469,
-          "polls": 6,
-          "move_threshold_amps": 3.915
+          "baseline_demand_amps": 36.272,
+          "demand_change_ms": 686.416,
+          "served_change_ms": 686.416,
+          "polls": 5,
+          "move_threshold_amps": 4.126
         },
         {
           "sample": 3,
-          "baseline_demand_amps": 38.032,
-          "demand_change_ms": 642.036,
-          "served_change_ms": 642.036,
+          "baseline_demand_amps": 34.552,
+          "demand_change_ms": 676.53,
+          "served_change_ms": 676.53,
           "polls": 5,
-          "move_threshold_amps": 4.014
+          "move_threshold_amps": 4.298
         },
         {
           "sample": 4,
-          "baseline_demand_amps": 36.499,
-          "demand_change_ms": 806.825,
-          "served_change_ms": 806.825,
+          "baseline_demand_amps": 35.905,
+          "demand_change_ms": 888.802,
+          "served_change_ms": 888.802,
           "polls": 6,
-          "move_threshold_amps": 4.167
+          "move_threshold_amps": 4.163
         },
         {
           "sample": 5,
-          "baseline_demand_amps": 34.609,
-          "demand_change_ms": 681.268,
-          "served_change_ms": 681.268,
-          "polls": 5,
-          "move_threshold_amps": 4.356
+          "baseline_demand_amps": 38.348,
+          "demand_change_ms": 391.181,
+          "served_change_ms": 391.181,
+          "polls": 3,
+          "move_threshold_amps": 3.919
         }
       ],
       "summary": {
         "demand_change_ms": {
           "n": 5,
-          "mean": 668.456,
-          "stdev": 177.356,
-          "min": 384.683,
-          "max": 827.469
+          "mean": 634.668,
+          "stdev": 186.527,
+          "min": 391.181,
+          "max": 888.802
         },
         "served_change_ms": {
           "n": 5,
-          "mean": 668.456,
-          "stdev": 177.356,
-          "min": 384.683,
-          "max": 827.469
+          "mean": 634.668,
+          "stdev": 186.527,
+          "min": 391.181,
+          "max": 888.802
         }
       },
       "poll_interval_seconds": 0.1,
-      "max_observed_poll_gap_ms": 165.636,
+      "max_observed_poll_gap_ms": 192.933,
       "measurement": "time from sending the demand_factor config request to receiving an /api/overview response whose total gateway-observed demand moved by more than max(10% of the low->high step, 0.25 A); served_change_ms is recorded only when served amps also moved by then, because served is capped by the lease budget (renewals never shrink a reservation)",
       "resolution_note": "polled every 0.1s; each figure is an upper bound at that resolution plus one overview round trip and any dashboard caching (see max_observed_poll_gap_ms)"
+    },
+    "allocation_recovery_after_spike": {
+      "passed": true,
+      "seconds": 48.344,
+      "quiet_meters": 10,
+      "spike_meters": 200,
+      "peak_reserved_amps_per_building": 99,
+      "buildings_without_a_reservation_during_spike": 1,
+      "spike_reproduced": true,
+      "recovery_seconds": 17.641,
+      "reserved_after_recovery": {
+        "achrafieh": 24,
+        "hamra": 22,
+        "mar_mikhael": 26
+      },
+      "criterion": "every building 'active' with 1 <= reserved <= ceil(1.5 x demand) + 3 A; timeout 90s"
     }
   },
   "restoration": [
@@ -4663,11 +4681,11 @@
     "demand_factor": 1
   },
   "invariant_sampling": {
-    "overview_samples": 243,
-    "node_samples": 708,
+    "overview_samples": 323,
+    "node_samples": 947,
     "transport_errors": 0,
-    "max_observed_granted_amps": 119,
+    "max_observed_granted_amps": 120,
     "violations": []
   },
-  "finished_at": "2026-10-29T11:31:09.383945+00:00"
+  "finished_at": "2026-10-29T12:39:07.931503+00:00"
 }

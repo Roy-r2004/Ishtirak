@@ -74,6 +74,11 @@ E2E_MIN_STEP_AMPS = 1.0            # smaller served-amps step cannot be told fro
 E2E_MOVE_FRACTION = 0.1            # "moved" = 10% of the calibrated step (and >= 0.25 A)
 E2E_MOVE_FLOOR_AMPS = 0.25
 E2E_TIMEOUT_SECONDS = 20
+RECOVERY_SPIKE_SECONDS = 10        # hold the 200-meter spike so a large reservation can form
+RECOVERY_TIMEOUT_SECONDS = 90      # two 12 s holds plus renewal and retry margins, with slack
+RECOVERY_RATIO, RECOVERY_SLACK_AMPS = 1.5, 3
+RECOVERY_QUIET_METERS, RECOVERY_QUIET_SECONDS = 10, 20   # reservations decay to a few amps before the spike
+RECOVERY_SPIKE_MIN_AMPS = 60       # a single reservation this large means the first-come hold was reproduced
 # Estimate only (not measured): typical healthy run and the sum-of-deadlines bound.
 EXPECTED_RUNTIME_MINUTES = {"typical": [8, 12], "deadline_bound": 30}
 
@@ -689,6 +694,51 @@ class Evaluation:
                                    "bound at that resolution plus one overview round trip and any dashboard "
                                    "caching (see max_observed_poll_gap_ms)"}
 
+    def allocation_recovery(self):
+        """Spike demand (200 meters), return to 50 meters, and time how long until every real building again
+        holds a budget that tracks its demand. With first-come allocation and reservations that never shrank,
+        a building could keep its spike reservation indefinitely; with lease tiers it decays once the older,
+        larger grants can no longer be in use (one 12 s hold after the last large grant)."""
+        def reserved():
+            leases = self.leader()["data"]["leases"]
+            return {l["building_id"]: l["amps"] for l in leases if l["building_id"] in BUILDINGS}
+
+        def balanced():
+            overview = self.overview()
+            held = reserved()
+            rows = [b for b in overview["buildings"] if b.get("online")]
+            return len(rows) == len(BUILDINGS) and all(
+                b["data"]["state"] == "active" and 1 <= held.get(b["id"], 0)
+                <= math.ceil(RECOVERY_RATIO * b["data"]["demand_amps"]) + RECOVERY_SLACK_AMPS for b in rows)
+        try:
+            # Start quiet so reservations are small, then jump to 200 meters: the first building to ask takes
+            # most of the free capacity (first-come) and the others are refused until demand falls again.
+            self.config(RECOVERY_QUIET_METERS)
+            self.pause(RECOVERY_QUIET_SECONDS)
+            self.config(200)
+            end, peak, starved = time.monotonic() + RECOVERY_SPIKE_SECONDS, 0, 0
+            while time.monotonic() < end:
+                held = reserved()
+                peak = max([peak, *held.values()])
+                starved = max(starved, len(BUILDINGS) - sum(1 for amps in held.values() if amps > 0))
+                self.stop_sampler.wait(.5)
+            self.config(50)
+            started = time.monotonic()
+            self.wait("every building to hold a budget that tracks its demand", balanced, RECOVERY_TIMEOUT_SECONDS, 1)
+            seconds = time.monotonic() - started
+            final = reserved()
+        finally:
+            try:
+                self.config(50, 1.0)
+            except Exception as error:
+                print(f"WARN: could not reset meters after allocation recovery: {error}", file=sys.stderr, flush=True)
+        return {"quiet_meters": RECOVERY_QUIET_METERS, "spike_meters": 200, "peak_reserved_amps_per_building": peak,
+                "buildings_without_a_reservation_during_spike": starved,
+                "spike_reproduced": peak >= RECOVERY_SPIKE_MIN_AMPS, "recovery_seconds": round(seconds, 3),
+                "reserved_after_recovery": final,
+                "criterion": f"every building 'active' with 1 <= reserved <= ceil({RECOVERY_RATIO} x demand) + "
+                             f"{RECOVERY_SLACK_AMPS} A; timeout {RECOVERY_TIMEOUT_SECONDS}s"}
+
     def restore(self):
         # Start only the named, project-ownership-checked services. Never delete data.
         for service in SERVICES:
@@ -717,6 +767,7 @@ class Evaluation:
                 self.phase(f"load_{count}_meters", lambda count=count: self.load(count))
             self.phase("concurrency_sweep", self.concurrency_sweep)
             self.phase("end_to_end_latency", self.end_to_end_latency)
+            self.phase("allocation_recovery_after_spike", self.allocation_recovery)
             self.assert_invariants()
             if self.node_samples <= 0:
                 raise AssertionError("no actual node state was sampled")

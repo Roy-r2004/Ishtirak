@@ -20,11 +20,22 @@ type Request struct {
 	SessionID  string `json:"session_id"`
 	Amps       int    `json:"amps"`
 }
+
+// Tier is one committed grant that a gateway may still be using. Amps is the grant's own amount.
+type Tier struct {
+	Version uint64 `json:"version"`
+	Amps    int    `json:"amps"`
+}
+
+// Lease is a building's reservation. Amps is the largest tier (the reserved amount) and Version the newest
+// tier. Stored leases always carry Tiers (ascending Version, strictly decreasing Amps); a Result.Lease
+// returned to a gateway is only that grant's own authorization and carries none.
 type Lease struct {
 	BuildingID string `json:"building_id"`
 	SessionID  string `json:"session_id"`
 	Amps       int    `json:"amps"`
 	Version    uint64 `json:"version"`
+	Tiers      []Tier `json:"tiers,omitempty"`
 }
 type Result struct {
 	Accepted  bool   `json:"accepted"`
@@ -83,6 +94,7 @@ func (f *FSM) View() State {
 	}
 	s := State{Initialized: f.state.Initialized, UninitializedHistory: f.state.UninitializedHistory, Capacity: f.state.Capacity, EventCounter: f.state.EventCounter, Leases: make(map[string]Lease, len(f.state.Leases)), Events: append([]Event{}, f.state.Events[start:]...)}
 	for key, l := range f.state.Leases {
+		l.Tiers = append([]Tier(nil), l.Tiers...)
 		s.Leases[key] = l
 	}
 	return s
@@ -148,10 +160,26 @@ func (f *FSM) Apply(log *raft.Log) interface{} {
 		return Result{RequestID: c.Request.RequestID, Reason: "capacity_uninitialized"}
 	}
 	if c.Kind == "expire" {
+		// Expiring a tier also drops every older tier: a newer grant never expires earlier.
 		l, ok := f.state.Leases[c.BuildingID]
-		if ok && l.Version == c.ExpectedVersion && log.Term == c.ExpectedTerm {
-			delete(f.state.Leases, c.BuildingID)
-			f.event("reclaimed", "", l, c.OccurredAt)
+		if ok && log.Term == c.ExpectedTerm && l.HasTier(c.ExpectedVersion) {
+			kept := make([]Tier, 0, len(l.Tiers))
+			for _, t := range l.Tiers {
+				if t.Version > c.ExpectedVersion {
+					kept = append(kept, t)
+				}
+			}
+			if len(kept) == 0 {
+				delete(f.state.Leases, c.BuildingID)
+				f.event("reclaimed", "", l, c.OccurredAt)
+			} else {
+				shrunk := l
+				shrunk.Tiers, shrunk.Amps = kept, kept[0].Amps
+				f.state.Leases[c.BuildingID] = shrunk
+				if shrunk.Amps < l.Amps {
+					f.event("shrunk", "", shrunk, c.OccurredAt)
+				}
+			}
 		}
 		return Result{Accepted: true, Reason: "expiry_applied"}
 	}
@@ -174,28 +202,52 @@ func (f *FSM) Apply(log *raft.Log) interface{} {
 	case exists && current.SessionID != r.SessionID:
 		result.Reason = "building_session_active"
 	default:
-		amps := r.Amps
-		if exists && current.Amps > amps {
-			amps = current.Amps
-		}
-		delta := amps
-		if exists {
-			delta -= current.Amps
+		// The reservation only grows here; it shrinks when an older tier expires. delta is the growth.
+		delta := 0
+		if r.Amps > current.Amps {
+			delta = r.Amps - current.Amps // current.Amps is 0 without a lease
 		}
 		// Subtraction avoids integer overflow for arbitrary JSON integers.
 		if delta > f.state.Capacity-Granted(f.state) {
 			result.Reason = "capacity_exhausted"
 		} else {
-			lease := Lease{BuildingID: r.BuildingID, SessionID: r.SessionID, Amps: amps, Version: log.Index}
-			f.state.Leases[r.BuildingID] = lease
+			// A newer tier with at least the same amps expires no earlier, so it dominates older ones.
+			tiers := make([]Tier, 0, len(current.Tiers)+1)
+			for _, t := range current.TierList() {
+				if t.Amps > r.Amps {
+					tiers = append(tiers, t)
+				}
+			}
+			tiers = append(tiers, Tier{Version: log.Index, Amps: r.Amps})
+			f.state.Leases[r.BuildingID] = Lease{BuildingID: r.BuildingID, SessionID: r.SessionID, Amps: tiers[0].Amps, Version: log.Index, Tiers: tiers}
+			// The gateway receives only this grant's own authorization, never the reserved maximum.
+			own := Lease{BuildingID: r.BuildingID, SessionID: r.SessionID, Amps: r.Amps, Version: log.Index}
 			result.Accepted = true
 			result.Reason = "granted"
-			result.Lease = &lease
-			f.event("granted", r.RequestID, lease, c.OccurredAt)
+			result.Lease = &own
+			f.event("granted", r.RequestID, own, c.OccurredAt)
 		}
 	}
 	f.state.Results[r.RequestID] = RecordedResult{Hash: hash, Result: result}
 	return result
+}
+
+// TierList returns the lease's tiers; a lease without any (legacy state) is one tier of its own amps and version.
+func (l Lease) TierList() []Tier {
+	if len(l.Tiers) == 0 {
+		return []Tier{{Version: l.Version, Amps: l.Amps}}
+	}
+	return l.Tiers
+}
+
+// HasTier reports whether version is the version of one of the lease's tiers.
+func (l Lease) HasTier(version uint64) bool {
+	for _, t := range l.TierList() {
+		if t.Version == version {
+			return true
+		}
+	}
+	return false
 }
 func (f *FSM) event(kind, request string, l Lease, at string) {
 	f.state.EventCounter++
@@ -233,9 +285,29 @@ func (f *FSM) Restore(r io.ReadCloser) error {
 			return errors.New("snapshot violates capacity")
 		}
 		total += l.Amps
+		// Snapshots written before tiers existed carry one implicit tier.
+		l.Tiers = append([]Tier(nil), l.TierList()...)
+		if err := validTiers(l); err != nil {
+			return err
+		}
+		s.Leases[key] = l
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.state = s
+	return nil
+}
+
+// validTiers checks the stored-lease invariants: ascending versions, strictly decreasing amps, and a lease
+// that mirrors its tiers (reserved = largest tier, version = newest tier).
+func validTiers(l Lease) error {
+	for i, t := range l.Tiers {
+		if t.Amps <= 0 || (i > 0 && (t.Version <= l.Tiers[i-1].Version || t.Amps >= l.Tiers[i-1].Amps)) {
+			return errors.New("snapshot has malformed lease tiers")
+		}
+	}
+	if l.Amps != l.Tiers[0].Amps || l.Version != l.Tiers[len(l.Tiers)-1].Version {
+		return errors.New("snapshot lease does not match its tiers")
+	}
 	return nil
 }

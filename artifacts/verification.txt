@@ -4,7 +4,8 @@ Commands run in this development session and what they reported. Output was read
 
 docker run --rm --mount type=bind,source=D:/Dist_FP/Dist_FP,target=/src -w /src golang:1.25 sh -c "go test -race ./... && go vet ./..."
 PASS, exit 0. ok: cmd/control, internal/coordinator, internal/ledger, internal/storage, internal/telemetry.
-Other cmd packages have no standalone tests. 23 named Go test functions; race detector clean; vet clean.
+Other cmd packages have no standalone tests. 44 named Go test functions (including the lease-tier tests); race detector clean; vet clean.
+Run again on the final code (branch fair-allocation): gofmt, go vet and go test -race -count=1 ./... all pass.
 
 python -I -m unittest discover -s scripts -p "test_*.py"
 PASS: 35 tests (21 fault-checker tests, 14 evaluation-statistics tests).
@@ -19,9 +20,11 @@ docker compose up -d --build --no-deps dashboard
 PASS: only the dashboard container was rebuilt; the other ten services were not recreated.
 
 python -I scripts/chaos_check.py --seed 1 --duration 90 --workers 8
-PASS (run e2ec4860): 1,529 requests; 284 accepted, 1,183 rejected, 62 unknown outcomes; 134 samples,
-maximum observed grant 120 A, 0 violations, no duplicate committed versions; all seven faultable services
-restored; three coordinators converged on applied index 22,808. Evidence: artifacts/chaos-check.json.
+PASS (run 1a5da564, on the final code with lease tiers): 1,559 requests; 427 accepted, 1,055 rejected, 77 unknown
+outcomes; 134 samples, maximum observed grant 120 A, 0 violations, no duplicate committed versions; all seven
+faultable services restored; three coordinators converged on applied index 40,791. Evidence: artifacts/chaos-check.json.
+An earlier run on the code before the tier change (run e2ec4860: 1,529 requests, 0 violations) also passed; its JSON
+was overwritten by the later run.
 
 python -I scripts/evaluate.py
 Attempt history, all against the live stack:
@@ -31,9 +34,16 @@ Attempt history, all against the live stack:
      Cause: test signal. Fixed (gateway-observed demand is the primary signal).
   3. FAIL in gateway_crash trial 1: the trial assumed Hamra held a lease; another building held it (first-come
      allocation). Cause: test assumption. Fixed (crash whichever real building holds a lease).
-  4. PASS (run f85446506835): all eleven phases; all controlled services restored; meters restored to 50 at
-     demand factor 1; 243 overview and 708 node samples, maximum observed grant 119 A, 0 violations.
-     Evidence: artifacts/evaluation.json.
+  4. PASS (run f85446506835, before the lease-tier change): all eleven phases; 243 overview and 708 node samples,
+     maximum observed grant 119 A, 0 violations. Kept as artifacts/evaluation-before-tiers.json.
+  5. PASS (run c6d1e46130fc, on the final code with lease tiers): all twelve phases (adds a demand-spike recovery
+     phase: one building reserved 99 A during the spike, every building back within budget 17.6 s after it);
+     all controlled services restored; meters restored to 50 at demand factor 1; 323 overview and 947 node samples,
+     maximum observed grant 120 A, 0 violations. Evidence: artifacts/evaluation.json.
+     Between runs 4 and 5 an intermediate tier run (ae2b705e) also passed; the first version of its recovery phase
+     did not reproduce the spike (peak 29 A), so the phase was corrected before the final run.
+     The final run's decision latency and throughput are worse than run 4 (see the report); the machine was busier
+     (PostgreSQL ~250% CPU, ~30 unrelated containers), so the difference is not attributed to the change.
 
 node scripts/browser-check.mjs
 PASS: 17 checks, 0 runtime errors, live WebSocket frames observed. Includes running the Resilience lab's
@@ -48,8 +58,9 @@ visually. The PowerPoint is rendered with LibreOffice and inspected slide by sli
 
 Observations worth knowing:
 - After a 200-meter run one building held a 107-111 A reservation while the other two showed expired leases (renewals
-  never shrink a reservation; allocation is first-come). The capacity invariant still held. This is documented as a
-  trade-off in the report; scripts/reset_demo.py restores a fair allocation.
+  never shrank a reservation; allocation is first-come). The capacity invariant still held. This was fixed with lease
+  tiers (reservations now decay once older, larger grants cannot be in use); the fix was reviewed by an independent
+  adversarial pass, which found no bug, and verified live (runs above). scripts/reset_demo.py remains available.
 - One coordinator was found stopped (clean exit) by a single `stop` request through the dashboard's demo-controls API
   before the first live run; its source was not identified. It was restored with the same controller before any test.
 

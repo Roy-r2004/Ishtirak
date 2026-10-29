@@ -60,7 +60,8 @@ func TestDuplicateConflictAndSessionIsolation(t *testing.T) {
 		t.Fatal(other)
 	}
 	renew := apply(f, 5, 1, grant("r3", "b", "s", 5))
-	if renew.Lease.Amps != 30 || renew.Lease.Version != 5 {
+	// A renewal returns only its own authorization; the reservation stays at the larger, still usable tier.
+	if renew.Lease.Amps != 5 || renew.Lease.Version != 5 || f.View().Leases["b"].Amps != 30 {
 		t.Fatal("renew shrank existing usable grant")
 	}
 	if Granted(f.View()) != 30 {

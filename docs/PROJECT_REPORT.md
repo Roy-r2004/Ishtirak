@@ -49,7 +49,7 @@ The ledger starts uninitialized. A replicated `init_capacity` command establishe
 
 Each grant request contains `request_id`, `building_id`, `session_id`, and positive integer `amps`. The state machine stores a canonical payload hash with the result. Repeating the same request returns the stored result; changing the payload under that ID produces `request_id_conflict`. A timeout is an unknown outcome, so a gateway retries the original ID and retains its original send time.
 
-Raft serializes commands, and the ledger protects state access with a mutex. Admission computes the incremental reservation and compares it with available capacity. A renewal for the same session cannot shrink an existing reservation. A different session cannot replace a currently reserved building lease. Each successful grant version is its unique committed log index.
+Raft serializes commands, and the ledger protects state access with a mutex. Admission computes the incremental reservation and compares it with available capacity. A renewal for the same session adds a tier, a committed grant a gateway may still be using; the reservation is the largest tier and shrinks only when an older, larger tier has expired (Section 4). A different session cannot replace a currently reserved building lease. Each successful grant version is its unique committed log index.
 
 An induction argument explains the accounting invariant. Initialization creates an empty ledger with positive capacity. A grant increases reservations only if its increment fits the available capacity. Rejected commands and duplicate requests do not increase reservations. Expiry only removes the matching reservation. Consequently, each committed transition preserves the capacity bound. This argument depends on the implementation matching the transition rules; unit tests, review, race checks, and live stress supply evidence for that correspondence.
 
@@ -72,9 +72,11 @@ With a relative monotonic clock-rate error bound `rho`, the gateway's latest sto
 | PostgreSQL fails | Raft grants continue; audit outbox catches up after recovery | Reads/history are degraded; bounded gateway queues may lose data |
 | Broker or gateway is unavailable | Telemetry becomes missing/stale; current lease rules still apply | No broker or gateway replication |
 
-Renewals retain the larger reservation until expiry. This avoids releasing capacity while an older, larger authorization could still be valid, but it can waste capacity after demand falls. Fair scheduling and starvation prevention are not implemented. The system demonstrates safety under constrained availability; it does not promise optimal utilization.
+**Lease tiers.** A gateway keeps every grant it receives with its own deadline and serves up to the largest one still valid, so the ledger must keep reserving that largest amount until the grant can no longer be used. Each lease therefore carries tiers: the committed grants that may still be in use, with strictly decreasing amounts as they get newer. The reservation is the largest tier. A renewal adds a tier (dropping older tiers it dominates, because a newer grant of equal or larger size expires no later), the coordinator holds each tier for its own 12 s after first observing it, and an expiry command removes that tier and every older one. The reservation therefore steps down to the building's current demand by itself while the gateway keeps renewing, and is never reduced while an older, larger grant could still be served under. A grant returns only its own amount, never the reserved maximum, so a gateway cannot extend an old large authorization. `docs/LEASE_TIERS.md` gives the safety argument and its assumptions: the same bounded clock-rate-error assumption as above, and all three coordinators must be upgraded together because an old replica ignores tier expiries. Replaying an old command log gives the same decisions as before the change, and old snapshots load with one implicit tier. Fair scheduling among simultaneous high demands is not implemented; the system demonstrates safety under constrained availability and does not promise optimal utilization.
 
-This trade-off was observed live. After the 200-meter load run, one building held a reservation of 107 to 111 A while the other two showed expired leases and 0 A served, although total demand in the live observation was only about 75 A (the dashboard figures are not in the JSON evidence): a renewal never shrinks a reservation while the same gateway session keeps renewing, and the remaining capacity was smaller than either other building's request. Total grants stayed within 120 A, so the invariant held; utilization and fairness did not. For demonstrations, `python scripts/reset_demo.py` restarts the three gateways (fresh sessions), lets the old reservations expire through the normal committed expiry, and returns the buildings to their current demand (in one observed run 24, 26 and 27 A, 77 A in total). A production design would need a safe shrink rule that waits until every older, larger grant at the gateway has expired; that change touches lease safety and was deliberately not made here.
+The tiers were added because of a failure observed live. Originally a renewal never shrank a reservation: after a jump from a quiet network to 200 meters, one building took about 100 A first-come and kept it for as long as its gateway renewed, while the other buildings had 0 A (holds of 107 to 111 A against about 26 A of demand, until the gateway restarted). The invariant held, but utilization and fairness did not. With tiers the same scenario recovers by itself: in evaluation run `c6d1e46130fc` one building reserved 99 A during the spike while another had no reservation, and 17.6 s after demand returned to 50 meters every building was again within 1.5 x its demand + 3 A (24, 22 and 26 A reserved). The decay takes about one hold (12 s) after demand falls.
+
+Remaining limits of this fix: allocation is still first-come, so while two buildings both demand more than the free capacity the first keeps it (no preemption and no fair-share policy); a request larger than the whole generator is rejected as invalid, so at an extreme overload (for example three buildings each demanding about 290 A) no building is served; and `scripts/reset_demo.py` (restart the gateways) remains available for a clean demonstration state. Preemption would need a different safety design and was not attempted.
 
 ## 5. Persistence and error handling
 
@@ -88,36 +90,36 @@ Raft request history and the audit outbox are retained without an unbounded-prod
 
 ## 6. Measured evaluation
 
-The live run on 29 October 2026 is stored in `artifacts/evaluation.json`, run ID `f85446506835`. It ran from 11:25:41 to 11:31:09 UTC against the actual Docker stack. The runner uses Python's standard library, bounded timeouts, and a `finally` restoration path. All eleven phases passed, all controlled services were restored, and the meter configuration returned to 50 meters with demand factor 1. Latency percentiles use linear interpolation between order statistics. Gateway-crash, leader-failure, load and end-to-end measurements are repeated (3, 3, 5 and 5 trials); the tables give the mean, the sample standard deviation (sd) and the range, and `evaluation.json` keeps every trial.
+The live run on 29 October 2026 is stored in `artifacts/evaluation.json`, run ID `c6d1e46130fc`, on the code with lease tiers. It ran from 12:32:09 to 12:39:08 UTC against the actual Docker stack. The runner uses Python's standard library, bounded timeouts, and a `finally` restoration path. All twelve phases passed, all controlled services were restored, and the meter configuration returned to 50 meters with demand factor 1. Latency percentiles use linear interpolation between order statistics. Gateway-crash, leader-failure, load and end-to-end measurements are repeated (3, 3, 5 and 5 trials); the tables give the mean, the sample standard deviation (sd) and the range, and `evaluation.json` keeps every trial. An earlier run on the code before the lease-tier change (`f85446506835`, eleven phases) is kept as `artifacts/evaluation-before-tiers.json` for the comparison below.
 
 ### Capacity and fault results
 
 | Scenario | Measured result |
 | --- | --- |
-| Real MQTT and SQL readiness | 506,853 durable readings already present at readiness |
-| Gateway crash and reclamation (3 trials) | Lease reclaimed 11.97, 10.80 and 14.25 s after the crash (mean 12.34, sd 1.76); each restart used a fresh session. The crashed building was whichever one held a lease |
-| Leader failure (3 trials) | Three different leaders in turn (coordinator2, 3, 1 stopped); a replacement accepted a grant after 4.05, 4.06 and 6.34 s (mean 4.82, sd 1.32) |
+| Real MQTT and SQL readiness | 710,263 durable readings already present at readiness |
+| Gateway crash and reclamation (3 trials) | Lease reclaimed 14.38, 13.58 and 12.89 s after the crash (mean 13.62, sd 0.74); each restart used a fresh session. The crashed building was whichever one held a lease |
+| Leader failure (3 trials) | The leader was stopped three times in turn (coordinator2, then 1, then 2); a replacement accepted a grant after 4.05, 6.39 and 4.05 s (mean 4.83, sd 1.35) |
 | Majority loss | Three new requests returned HTTP 503; simulated service was 0 A after 13 s |
-| PostgreSQL outage | Grant accepted while SQL was down; its exact audit request appeared once after recovery; audit rows rose from 8,291 to 8,314; 550 additional durable readings; 66 readings pending during the outage |
+| PostgreSQL outage | Grant accepted while SQL was down; its exact audit request appeared once after recovery; audit rows rose from 19,543 to 19,594; 1,184 additional durable readings; 50 readings pending during the outage |
 | Concurrent capacity stress | Forty requests of 7 A: 17 accepted, 23 rejected, 119 A committed under 120 A |
 | Duplicate and conflict | Duplicate preserved the lease; changed payload under the same ID rejected |
 
 The leader-failure measurement includes routing and a successful grant, not just election time. Gateway reclamation is an observation made through the orchestration path, not an exact internal timer measurement. A 503 during majority loss correctly expresses unavailable/unknown commit outcome, not a definitive rejection that may safely be retried under a new ID.
 
-The sampler collected 243 combined overviews and 708 coordinator snapshots, with zero transport errors, a maximum observed grant of 119 A, and no sampled invariant violations. It also checked gateway served demand against local valid budgets. Polling cannot prove that no transient existed between observations; deterministic state-machine checks and timing design supply complementary evidence.
+The sampler collected 323 combined overviews and 947 coordinator snapshots, with zero transport errors, a maximum observed grant of 120 A (the limit, not above it), and no sampled invariant violations. It also checked gateway served demand against local valid budgets. Polling cannot prove that no transient existed between observations; deterministic state-machine checks and timing design supply complementary evidence.
 
 ### Randomized fault check
 
-`scripts/chaos_check.py` is a small history checker in the spirit of Jepsen. With a fixed seed it builds a deterministic fault schedule, runs eight concurrent workers that send randomized grants, duplicate replays and one changed-payload replay to random coordinators while the schedule stops and restarts services, samples the capacity ledger about once a second, then heals everything and checks the recorded history. Run `e2ec4860` (seed 1, 90 s, 11:13:35 to 11:15:06 UTC) stopped and restarted coordinator2, the Hamra and Mar Mikhael gateways, and included a majority-loss window in which coordinator3 and coordinator1 were down together for about 15 s.
+`scripts/chaos_check.py` is a small history checker in the spirit of Jepsen. With a fixed seed it builds a deterministic fault schedule, runs eight concurrent workers that send randomized grants, duplicate replays and one changed-payload replay to random coordinators while the schedule stops and restarts services, samples the capacity ledger about once a second, then heals everything and checks the recorded history. Run `1a5da564` (seed 1, 90 s, 12:30:37 to 12:32:08 UTC, on the code with lease tiers) stopped and restarted coordinator2, the Hamra gateway twice and the Mar Mikhael gateway, and included a majority-loss window in which coordinator3 and coordinator1 were down together for about 15 s.
 
 | Check | Result |
 | --- | --- |
-| Requests sent | 1,529: 284 accepted, 1,183 rejected, 62 unknown outcomes |
-| Rejections | 1,182 `capacity_exhausted`; 1 `request_id_conflict` (the deliberate changed-payload replay) |
+| Requests sent | 1,559: 427 accepted, 1,055 rejected, 77 unknown outcomes |
+| Rejections | 1,054 `capacity_exhausted`; 1 `request_id_conflict` (the deliberate changed-payload replay) |
 | Unknown outcomes | HTTP 503 or timeout, counted separately because they may have committed |
 | Capacity invariant | 134 samples; maximum observed grant 120 A (the limit, not above it); 0 violations |
 | Unique versions | No committed version was returned for two different request IDs |
-| Recovery | All seven faultable services restarted; the three coordinators reported the same applied index (22,808) |
+| Recovery | All seven faultable services restarted; the three coordinators reported the same applied index (40,791) |
 
 The synthetic `chaos-*` buildings share the 120 A budget with the real gateways, which is why capacity rejections dominate. Like the evaluation sampler, this is observational evidence from one seed, not a proof; the unit tests show the checker flags an over-capacity history and duplicate versions.
 
@@ -127,11 +129,11 @@ Each load settled for 10 seconds, then ran five trials of 200 allocation request
 
 | Active meters | p50 ms | p95 ms | Decisions/s |
 | --- | --- | --- | --- |
-| 10 | 79.5 ± 1.0 (78.2-80.7) | 113.3 ± 4.4 (109.5-120.1) | 49.4 ± 0.4 |
-| 50 | 78.3 ± 0.6 (77.7-79.2) | 112.9 ± 2.3 (110.9-116.5) | 50.0 ± 0.6 |
-| 200 | 79.4 ± 1.4 (77.1-80.6) | 114.1 ± 3.9 (109.1-119.2) | 48.6 ± 0.3 |
+| 10 | 86.6 ± 6.7 (80.7-94.6) | 133.1 ± 10.1 (120.1-143.3) | 43.9 ± 2.6 |
+| 50 | 99.8 ± 18.9 (87.1-133.1) | 167.0 ± 40.1 (137.4-235.8) | 38.0 ± 5.5 |
+| 200 | 107.5 ± 16.7 (91.8-130.0) | 156.7 ± 23.8 (126.0-182.1) | 36.4 ± 5.4 |
 
-Observed gateway MQTT readings per second in the median trial's window were 9.7, 57.8 and 193.9 for 10, 50 and 200 meters, and SQL insert deltas were 53, 283 and 1,066 readings. Batching and observation boundaries explain why these differ from the nominal rates.
+Observed gateway MQTT readings per second in the median trial's window were 9.6, 48.3 and 191.6 for 10, 50 and 200 meters, and SQL insert deltas were 57, 284 and 1,133 readings. Batching and observation boundaries explain why these differ from the nominal rates.
 
 These are HTTP allocation-decision latencies, including local proxy/network and commit time. The decision benchmark does not exercise meter volume, so its flat latency across meter counts says little about meter scalability by itself; the meter and reading volume is shown by the readings per second above.
 
@@ -139,20 +141,24 @@ These are HTTP allocation-decision latencies, including local proxy/network and 
 
 | Clients | p50 ms | p95 ms | Decisions/s |
 | --- | --- | --- | --- |
-| 1 | 38.8 | 54.8 | 25.9 |
-| 4 | 82.1 | 125.2 | 46.8 |
-| 16 | 275.6 | 437.0 | 52.7 |
-| 64 | 300.6 | 517.3 | 51.6 |
+| 1 | 35.9 | 53.7 | 26.0 |
+| 4 | 86.9 | 140.6 | 42.7 |
+| 16 | 308.1 | 485.1 | 47.5 |
+| 64 | 336.3 | 603.2 | 47.3 |
 
-There were no transport errors. Throughput rises with load and then plateaus near 50 decisions/s while latency grows, which is the shape expected when requests queue behind one serialized resource. Every grant is ordered by the single Raft leader, so this is consistent with the commit path being the limit, but the cause was not profiled: the dashboard proxy and the Python client are also in the path. The plateau is therefore a measured ceiling for this setup, not an identified bottleneck.
+There were no transport errors. Throughput rises with load and then plateaus near 47 decisions/s while latency grows, which is the shape expected when requests queue behind one serialized resource. Every grant is ordered by the single Raft leader, so this is consistent with the commit path being the limit, but the cause was not profiled: the dashboard proxy and the Python client are also in the path. The plateau is therefore a measured ceiling for this setup, not an identified bottleneck.
 
-**End-to-end telemetry latency.** Stepping the demand multiplier from 0.5 to 1.0 at 50 meters, the change became visible in the gateways' observed demand 0.38 to 0.83 s after the request was sent (mean 0.67 s, sd 0.18 s, five samples; polling every 0.1 s, largest poll gap 166 ms). This covers the control request, meter publish, MQTT, gateway aggregation and dashboard refresh, and is an upper bound at the polling resolution. Served demand moved at the same instant in each sample because a gateway computes it from the same snapshot (the smaller of demand and its lease budget); when a lease budget is the limit, served demand stays flat while demand rises.
+**End-to-end telemetry latency.** Stepping the demand multiplier from 0.5 to 1.0 at 50 meters, the change became visible in the gateways' observed demand 0.39 to 0.89 s after the request was sent (mean 0.63 s, sd 0.19 s, five samples; polling every 0.1 s, largest poll gap 193 ms). This covers the control request, meter publish, MQTT, gateway aggregation and dashboard refresh, and is an upper bound at the polling resolution. Served demand moved at the same instant in each sample because a gateway computes it from the same snapshot (the smaller of demand and its lease budget); when a lease budget is the limit, served demand stays flat while demand rises.
+
+**Allocation recovery after a demand spike.** The twelfth phase runs at 10 meters for 20 s (reservations decay to a few amps), jumps to 200 meters for 10 s, then returns to 50 meters. During the spike one building reserved 99 A and one building had no reservation (first-come); 17.6 s after the return every building was again within budget (reserved 24, 22 and 26 A). Before lease tiers the same sequence left the first building's large reservation in place for as long as its gateway renewed.
+
+**Comparison with the run before lease tiers.** The earlier run (`artifacts/evaluation-before-tiers.json`) measured a p50 of 78.3 to 79.5 ms and 48.6 to 50.0 decisions/s at the three meter counts with four clients, against 86.6 to 107.5 ms and 36.4 to 43.9 decisions/s in this run; the one-client p50 was 38.7 ms and then 35.9 ms. This is not a controlled comparison: the second run was measured while PostgreSQL was using about 250% CPU and some thirty unrelated containers were running on the same laptop, and its trial spread is larger (sd up to 19 ms). The unchanged one-client latency suggests the ledger change is not the cause, but that was not isolated, so the report claims no measured cost or benefit of tiers for decision speed. Failover (4.82 s, then 4.83 s) and reclamation (12.3 s, then 13.6 s) are similar.
 
 One host, one run per configuration, short windows, concurrent local activity, and no network-delay injection limit these conclusions, and the trials are repeats on one stack rather than independent samples. Further evaluation should use dedicated hosts, profiling of the commit path, longer soak tests, and deliberate packet loss and partition schedules. There is no measured claim of unlimited scale.
 
 ### Software and browser checks
 
-The integrated Go code passed `go test -race ./...` and `go vet ./...` in `golang:1.25`. There are 23 named test functions covering ledger concurrency, duplicate/conflict handling, version/term expiry fences, snapshot restoration, capacity initialization, fixed TTL, inherited deadlines, late replies, gateway restart identities, bounded reading queues, redirects, simulator configuration, and local control restrictions. The Python tooling has 35 unit tests (21 for the fault checker, 14 for the statistics helpers) and the dashboard's scenario logic has 18 Vitest tests.
+The integrated Go code passed `go test -race ./...` and `go vet ./...` in `golang:1.25`. There are 44 named test functions covering the lease tiers (a seeded property test of 6,000 random commands checking every invariant and deterministic replay, an oracle model without pruning, agreement with the old rules on old-style logs, snapshot and legacy-snapshot restore, and a simulation with delayed and reordered commits and leader changes), ledger concurrency, duplicate/conflict handling, version/term expiry fences, snapshot restoration, capacity initialization, fixed TTL, inherited deadlines, late replies, gateway restart identities, bounded reading queues, redirects, simulator configuration, and local control restrictions. The Python tooling has 35 unit tests (21 for the fault checker, 14 for the statistics helpers) and the dashboard's scenario logic has 18 Vitest tests.
 
 The TypeScript/Vite production build passed. `npm audit --omit=dev` reported zero known vulnerabilities for the final dependency set (React 19, Recharts, Motion, Radix Dialog, Inter). This is a dependency-database result, not a comprehensive security certification.
 
@@ -173,7 +179,7 @@ The dashboard is a React 19 single-page application: live capacity metrics, a Re
 | Concurrency and consistency | Ordered majority-committed FSM, idempotency, atomic capacity checks; randomized fault check of the recorded history |
 | Fault tolerance | Leader replacement, majority-loss refusal, safe lease expiry, SQL catch-up; repeated failover and reclamation trials; randomized fault schedule with a majority-loss window |
 | Performance and scalability evaluation | 10/50/200 meter results over five trials with mean, sd and range; concurrency sweep to 64 clients; end-to-end telemetry latency; explicit methodological limits |
-| Challenges and trade-offs | Unknown outcomes, duplicates, stale leaders, monotonic timing, safety versus availability, first-come allocation without shrinking, and retention; Sections 3-6 |
+| Challenges and trade-offs | Unknown outcomes, duplicates, stale leaders, monotonic timing, safety versus availability, first-come allocation with tiered, decaying reservations, and retention; Sections 3-6 |
 | Creativity and practical relevance | Neighborhood-specific capacity coordination with a live operator, a Resilience lab that breaks the running system on purpose, and a capacity proof drawn from observations |
 | Functional application | `docker compose up --build -d`; local dashboard at port 8088 |
 | Documentation | This report, README, source tests, measured JSON evidence |
@@ -185,11 +191,11 @@ The project addresses each required deliverable and the named distributed-system
 
 Start Docker Desktop with Linux containers. In the project root run `docker compose up --build -d`, then open `http://localhost:8088`. Internet access is needed for the first image/dependency build. No host Go compiler or external AI credential is required.
 
-Run `python scripts/evaluate.py` to repeat the fault and load sequence (about 5 to 12 minutes; the recorded run took 5.5 minutes, and a failing run is bounded by phase deadlines). Run `python scripts/chaos_check.py --seed 1 --duration 90` for the randomized fault check; the same seed reproduces the same fault schedule, and `--dry-run` prints it without touching the stack. Run them on a demo you are prepared to interrupt: they temporarily stop only this project's named services, preserve volumes, and restore services and the prior meter configuration. Do not change meter counts in the UI while they are measuring. After a 200-meter run, `python scripts/reset_demo.py` returns the buildings to a fair allocation (see Section 4). Python unit tests: `python -I -m unittest discover -s scripts -p "test_*.py"`; dashboard tests: `npm test` in `web`.
+Run `python scripts/evaluate.py` to repeat the fault and load sequence (about 7 to 12 minutes; the recorded run took 7 minutes, and a failing run is bounded by phase deadlines). Run `python scripts/chaos_check.py --seed 1 --duration 90` for the randomized fault check; the same seed reproduces the same fault schedule, and `--dry-run` prints it without touching the stack. Run them on a demo you are prepared to interrupt: they temporarily stop only this project's named services, preserve volumes, and restore services and the prior meter configuration. Do not change meter counts in the UI while they are measuring. Reservations decay on their own about 12 s after demand falls; `python scripts/reset_demo.py` restarts the gateways for an immediate clean state (see Section 4). Python unit tests: `python -I -m unittest discover -s scripts -p "test_*.py"`; dashboard tests: `npm test` in `web`.
 
 Run `node scripts/browser-check.mjs` for browser checks. This uses Node 24 and local Chrome; set `CHROME_PATH` if Chrome is installed elsewhere. It creates a dedicated temporary browser profile under `artifacts`, changes the simulator to 10 and back to 50, and closes the test browser. It does not use the user's normal browser profile.
 
-For a live presentation, open the Resilience lab and run the scenarios in this order, letting each recover before the next: leader failover (the observed timeline shows the leader lost and a new one observed while the capacity proof stays at zero violations), majority loss (new grants stop and service reaches 0 A), gateway crash (conservative reclamation), then database outage (catch-up). Then compare 10/50/200 meters in the Simulation lab, and run `python scripts/reset_demo.py` afterwards. The dashboard distinguishes requested demand, served demand, and reserved capacity.
+For a live presentation, open the Resilience lab and run the scenarios in this order, letting each recover before the next: leader failover (the observed timeline shows the leader lost and a new one observed while the capacity proof stays at zero violations), majority loss (new grants stop and service reaches 0 A), gateway crash (conservative reclamation), then database outage (catch-up). Then compare 10/50/200 meters in the Simulation lab and watch a building's reserved amount step down after demand falls (the Activity log shows "Reservation reduced" events). The dashboard distinguishes requested demand, served demand, and reserved capacity.
 
 Use `docker compose stop` and `docker compose start` to preserve the demo between sessions. Do not remove volumes unless intentionally resetting all prototype data. The project does not publish or deploy to an external service.
 
@@ -199,7 +205,7 @@ Implementation used parallel workers in isolated copies for coordinator and tele
 
 The later additions (the redesigned dashboard, the Resilience lab, the randomized fault checker and the repeated-trial evaluation) did not modify consensus, ledger or lease code. They were built by isolated workers, integrated by the main author and checked by running the project's own tests and the live runs described in Section 6; running them exposed and fixed three defects in the new evaluation code itself (a probe that reused a still-leased building, a timing signal capped by the lease budget, and a trial that assumed a fixed building held the lease). An independent read-only audit then compared the deliverables with the brief, its rubric and every figure in this report; its confirmed findings were fixed. No external review of the safety design has been performed, and the independent reviews do not amount to a formal verification.
 
-Known design limitations remain: no physical electrical certification; no host, broker, database or gateway failover; potentially lost readings during outages; histories grow over time; first-come allocation with no fairness guarantee, so a building that once reserved a large amount can starve the others until its gateway restarts; no active reservation shrinking; a measured decision-throughput ceiling of about 50 per second whose bottleneck was not profiled; observed UI state may lag; and no production authentication/TLS design. Optional image/TypeSafe ideas were not added to authoritative allocation or to the prototype's scope.
+Known design limitations remain: no physical electrical certification; no host, broker, database or gateway failover; potentially lost readings during outages; histories grow over time; first-come allocation with no preemption or fair-share policy, so while two buildings both demand more than the free capacity the first keeps it, and a request above the whole generator capacity is rejected; reservations decay only about one 12 s hold after demand falls; coordinators must be upgraded together for the tier model; a measured decision-throughput ceiling of about 47 per second whose bottleneck was not profiled; observed UI state may lag; and no production authentication/TLS design. Optional image/TypeSafe ideas were not added to authoritative allocation or to the prototype's scope.
 
 The next engineering steps, if scope is expanded, are repeated multi-host testing, clock/suspension experiments, bounded history retention with replay guarantees, fair admission policies, and a separate authenticated deployment design. These are future work, not implemented capabilities.
 
