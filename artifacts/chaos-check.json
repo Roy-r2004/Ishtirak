@@ -1,0 +1,554 @@
+{
+  "seed": 1,
+  "duration_seconds": 90,
+  "workers": 8,
+  "run_id": "e2ec4860",
+  "started_at": "2026-10-29T11:13:35.583823+00:00",
+  "finished_at": "2026-10-29T11:15:06.376567+00:00",
+  "base_url": "http://127.0.0.1:8088",
+  "result": "PASS",
+  "failures": [],
+  "interrupted": false,
+  "schedule": [
+    {
+      "at": 6,
+      "service": "coordinator2",
+      "action": "stop"
+    },
+    {
+      "at": 14,
+      "service": "coordinator2",
+      "action": "start"
+    },
+    {
+      "at": 20,
+      "service": "gateway-hamra",
+      "action": "stop"
+    },
+    {
+      "at": 28,
+      "service": "gateway-hamra",
+      "action": "start"
+    },
+    {
+      "at": 35,
+      "service": "coordinator3",
+      "action": "stop",
+      "window": "majority_loss"
+    },
+    {
+      "at": 36,
+      "service": "coordinator1",
+      "action": "stop",
+      "window": "majority_loss"
+    },
+    {
+      "at": 51,
+      "service": "coordinator3",
+      "action": "start",
+      "window": "majority_loss"
+    },
+    {
+      "at": 52,
+      "service": "coordinator1",
+      "action": "start",
+      "window": "majority_loss"
+    },
+    {
+      "at": 56,
+      "service": "gateway-mar-mikhael",
+      "action": "stop"
+    },
+    {
+      "at": 66,
+      "service": "gateway-mar-mikhael",
+      "action": "start"
+    },
+    {
+      "at": 70,
+      "service": "gateway-hamra",
+      "action": "stop"
+    },
+    {
+      "at": 77,
+      "service": "gateway-hamra",
+      "action": "start"
+    }
+  ],
+  "actions_executed": [
+    {
+      "at": 6,
+      "ran_at": 6.34,
+      "service": "coordinator2",
+      "action": "stop",
+      "ok": true,
+      "http_status": 200
+    },
+    {
+      "at": 14,
+      "ran_at": 14.31,
+      "service": "coordinator2",
+      "action": "start",
+      "ok": true,
+      "http_status": 200
+    },
+    {
+      "at": 20,
+      "ran_at": 20.5,
+      "service": "gateway-hamra",
+      "action": "stop",
+      "ok": true,
+      "http_status": 200
+    },
+    {
+      "at": 28,
+      "ran_at": 28.47,
+      "service": "gateway-hamra",
+      "action": "start",
+      "ok": true,
+      "http_status": 200
+    },
+    {
+      "at": 35,
+      "ran_at": 35.38,
+      "service": "coordinator3",
+      "action": "stop",
+      "ok": true,
+      "http_status": 200
+    },
+    {
+      "at": 36,
+      "ran_at": 36.36,
+      "service": "coordinator1",
+      "action": "stop",
+      "ok": true,
+      "http_status": 200
+    },
+    {
+      "at": 51,
+      "ran_at": 51.3,
+      "service": "coordinator3",
+      "action": "start",
+      "ok": true,
+      "http_status": 200
+    },
+    {
+      "at": 52,
+      "ran_at": 52.3,
+      "service": "coordinator1",
+      "action": "start",
+      "ok": true,
+      "http_status": 200
+    },
+    {
+      "at": 56,
+      "ran_at": 56.45,
+      "service": "gateway-mar-mikhael",
+      "action": "stop",
+      "ok": true,
+      "http_status": 200
+    },
+    {
+      "at": 66,
+      "ran_at": 66.36,
+      "service": "gateway-mar-mikhael",
+      "action": "start",
+      "ok": true,
+      "http_status": 200
+    },
+    {
+      "at": 70,
+      "ran_at": 70.36,
+      "service": "gateway-hamra",
+      "action": "stop",
+      "ok": true,
+      "http_status": 200
+    },
+    {
+      "at": 77,
+      "ran_at": 77.5,
+      "service": "gateway-hamra",
+      "action": "start",
+      "ok": true,
+      "http_status": 200
+    }
+  ],
+  "counts": {
+    "requests": 1529,
+    "accepted": 284,
+    "rejected": 1183,
+    "unknown_outcome": 62,
+    "redirect_not_processed": 0,
+    "invalid": 0,
+    "rejection_reasons": {
+      "capacity_exhausted": 1182,
+      "request_id_conflict": 1
+    }
+  },
+  "conflict_replay": {
+    "attempted": true,
+    "observed": true,
+    "outcome": "rejected",
+    "reason": "request_id_conflict",
+    "tries": 1
+  },
+  "history": {
+    "violations": [],
+    "max_granted": 120,
+    "duplicate_versions": [],
+    "samples": 134,
+    "grants": 1529
+  },
+  "sampling": {
+    "node_samples": 134,
+    "sample_errors": 0,
+    "coordinator_status": [
+      {
+        "t": 0.3,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 1.38,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 2.58,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 3.64,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 4.8,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 5.84,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 8.72,
+        "coordinators_up": 2,
+        "gateways_up": 3,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 10.88,
+        "coordinators_up": 2,
+        "gateways_up": 3,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 13.73,
+        "coordinators_up": 2,
+        "gateways_up": 3,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 15.78,
+        "coordinators_up": 2,
+        "gateways_up": 3,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 16.84,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 17.94,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 19.05,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 20.09,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 22.97,
+        "coordinators_up": 3,
+        "gateways_up": 2,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 25.16,
+        "coordinators_up": 3,
+        "gateways_up": 2,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 28.11,
+        "coordinators_up": 3,
+        "gateways_up": 2,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 30.09,
+        "coordinators_up": 3,
+        "gateways_up": 2,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 31.22,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 32.31,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 33.36,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 34.47,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator3"
+      },
+      {
+        "t": 37.33,
+        "coordinators_up": 2,
+        "gateways_up": 3,
+        "leader": null
+      },
+      {
+        "t": 40.17,
+        "coordinators_up": 1,
+        "gateways_up": 3,
+        "leader": null
+      },
+      {
+        "t": 43.02,
+        "coordinators_up": 1,
+        "gateways_up": 3,
+        "leader": null
+      },
+      {
+        "t": 45.86,
+        "coordinators_up": 1,
+        "gateways_up": 3,
+        "leader": null
+      },
+      {
+        "t": 48.73,
+        "coordinators_up": 1,
+        "gateways_up": 3,
+        "leader": null
+      },
+      {
+        "t": 51.58,
+        "coordinators_up": 1,
+        "gateways_up": 3,
+        "leader": null
+      },
+      {
+        "t": 53.64,
+        "coordinators_up": 2,
+        "gateways_up": 3,
+        "leader": null
+      },
+      {
+        "t": 54.94,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator2"
+      },
+      {
+        "t": 56.08,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator2"
+      },
+      {
+        "t": 58.97,
+        "coordinators_up": 3,
+        "gateways_up": 2,
+        "leader": "coordinator2"
+      },
+      {
+        "t": 61.83,
+        "coordinators_up": 3,
+        "gateways_up": 2,
+        "leader": "coordinator2"
+      },
+      {
+        "t": 64.7,
+        "coordinators_up": 3,
+        "gateways_up": 2,
+        "leader": "coordinator2"
+      },
+      {
+        "t": 67.58,
+        "coordinators_up": 3,
+        "gateways_up": 2,
+        "leader": "coordinator2"
+      },
+      {
+        "t": 68.62,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator2"
+      },
+      {
+        "t": 69.78,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator2"
+      },
+      {
+        "t": 72.64,
+        "coordinators_up": 3,
+        "gateways_up": 2,
+        "leader": "coordinator2"
+      },
+      {
+        "t": 74.78,
+        "coordinators_up": 3,
+        "gateways_up": 2,
+        "leader": "coordinator2"
+      },
+      {
+        "t": 77.72,
+        "coordinators_up": 3,
+        "gateways_up": 2,
+        "leader": "coordinator2"
+      },
+      {
+        "t": 79.78,
+        "coordinators_up": 3,
+        "gateways_up": 2,
+        "leader": "coordinator2"
+      },
+      {
+        "t": 80.86,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator2"
+      },
+      {
+        "t": 81.94,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator2"
+      },
+      {
+        "t": 82.98,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator2"
+      },
+      {
+        "t": 84.12,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator2"
+      },
+      {
+        "t": 85.48,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator2"
+      },
+      {
+        "t": 86.55,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator2"
+      },
+      {
+        "t": 87.91,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator2"
+      },
+      {
+        "t": 88.98,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator2"
+      },
+      {
+        "t": 90.06,
+        "coordinators_up": 3,
+        "gateways_up": 3,
+        "leader": "coordinator2"
+      }
+    ]
+  },
+  "restoration": [
+    {
+      "service": "postgres",
+      "started": true
+    },
+    {
+      "service": "coordinator1",
+      "started": true
+    },
+    {
+      "service": "coordinator2",
+      "started": true
+    },
+    {
+      "service": "coordinator3",
+      "started": true
+    },
+    {
+      "service": "gateway-hamra",
+      "started": true
+    },
+    {
+      "service": "gateway-mar-mikhael",
+      "started": true
+    },
+    {
+      "service": "gateway-achrafieh",
+      "started": true
+    }
+  ],
+  "convergence": {
+    "converged": true,
+    "attempts": 1,
+    "applied_index": {
+      "coordinator1": "22808",
+      "coordinator2": "22808",
+      "coordinator3": "22808"
+    }
+  },
+  "limits": [
+    "Sampling is not proof: the sampler polls /api/overview about once a second and cannot see transients between polls.",
+    "Unknown outcomes are not rejections: HTTP 503, timeouts and transport errors may have committed and are counted separately.",
+    "Synthetic chaos-* buildings share the 120 A capacity with the real gateways, so many rejections are expected capacity_exhausted decisions.",
+    "Convergence is a point-in-time comparison of applied indexes after healing; gateways keep renewing, so it is retried until the values agree.",
+    "No gateway disk persistence, database failover or physical breaker is evaluated."
+  ]
+}

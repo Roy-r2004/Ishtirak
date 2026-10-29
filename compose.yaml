@@ -1,0 +1,92 @@
+name: ishtirak
+
+x-coordinator: &coordinator
+  build: {context: ., args: {SERVICE: coordinator}}
+  restart: unless-stopped
+  user: "0:0"
+  environment: &coordinator-env
+    HTTP_ADDR: ":8080"
+    RAFT_BIND: ":9000"
+    PEERS: "coordinator1=coordinator1:9000,coordinator2=coordinator2:9000,coordinator3=coordinator3:9000"
+    HTTP_PEERS: "coordinator1=http://coordinator1:8080,coordinator2=http://coordinator2:8080,coordinator3=http://coordinator3:8080"
+    DATA_DIR: /data
+    CAPACITY_AMPS: "120"
+    LEASE_MS: "12000"
+    DATABASE_URL: "postgres://ishtirak:ishtirak_demo@postgres:5432/ishtirak?sslmode=disable"
+  depends_on: {postgres: {condition: service_healthy}}
+
+x-gateway: &gateway
+  build: {context: ., args: {SERVICE: gateway}}
+  restart: unless-stopped
+  environment: &gateway-env
+    HTTP_ADDR: ":8080"
+    MQTT_URL: "tcp://mosquitto:1883"
+    COORDINATORS: "http://coordinator1:8080,http://coordinator2:8080,http://coordinator3:8080"
+    SAFETY_MARGIN_MS: "2000"
+  depends_on: [mosquitto, coordinator1, coordinator2, coordinator3]
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ishtirak-postgres
+    restart: unless-stopped
+    environment: {POSTGRES_USER: ishtirak, POSTGRES_PASSWORD: ishtirak_demo, POSTGRES_DB: ishtirak}
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
+    healthcheck: {test: [CMD-SHELL, "pg_isready -U ishtirak"], interval: 2s, timeout: 2s, retries: 15}
+  mosquitto:
+    image: eclipse-mosquitto:2.0.22
+    container_name: ishtirak-mosquitto
+    restart: unless-stopped
+    volumes: ["./deploy/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro"]
+  coordinator1:
+    <<: *coordinator
+    container_name: ishtirak-coordinator1
+    environment: {<<: *coordinator-env, NODE_ID: coordinator1, RAFT_ADDR: "coordinator1:9000", BOOTSTRAP: "true"}
+    volumes: ["raft1:/data"]
+  coordinator2:
+    <<: *coordinator
+    container_name: ishtirak-coordinator2
+    environment: {<<: *coordinator-env, NODE_ID: coordinator2, RAFT_ADDR: "coordinator2:9000", BOOTSTRAP: "false"}
+    volumes: ["raft2:/data"]
+  coordinator3:
+    <<: *coordinator
+    container_name: ishtirak-coordinator3
+    environment: {<<: *coordinator-env, NODE_ID: coordinator3, RAFT_ADDR: "coordinator3:9000", BOOTSTRAP: "false"}
+    volumes: ["raft3:/data"]
+  gateway-hamra:
+    <<: *gateway
+    container_name: ishtirak-gateway-hamra
+    environment: {<<: *gateway-env, BUILDING_ID: hamra, BUILDING_NAME: "Hamra Residence"}
+  gateway-mar-mikhael:
+    <<: *gateway
+    container_name: ishtirak-gateway-mar-mikhael
+    environment: {<<: *gateway-env, BUILDING_ID: mar_mikhael, BUILDING_NAME: "Mar Mikhael House"}
+  gateway-achrafieh:
+    <<: *gateway
+    container_name: ishtirak-gateway-achrafieh
+    environment: {<<: *gateway-env, BUILDING_ID: achrafieh, BUILDING_NAME: "Achrafieh Gardens"}
+  meters:
+    build: {context: ., args: {SERVICE: meters}}
+    container_name: ishtirak-meters
+    restart: unless-stopped
+    environment: {MQTT_URL: "tcp://mosquitto:1883", BUILDINGS: "hamra,mar_mikhael,achrafieh", METER_COUNT: "50", HTTP_ADDR: ":8080"}
+    depends_on: [mosquitto]
+  control:
+    build: {context: ., args: {SERVICE: control}}
+    container_name: ishtirak-control
+    user: "0:0"
+    restart: unless-stopped
+    environment: {ENABLE_DEMO: "true"}
+    volumes: ["/var/run/docker.sock:/var/run/docker.sock"]
+  dashboard:
+    build: ./web
+    container_name: ishtirak-dashboard
+    restart: unless-stopped
+    ports: ["127.0.0.1:8088:80"]
+    depends_on: [control]
+
+volumes:
+  postgres-data:
+  raft1:
+  raft2:
+  raft3:

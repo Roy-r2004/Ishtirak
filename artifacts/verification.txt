@@ -1,0 +1,60 @@
+Ishtirak verification record - 2026-10-29
+
+Commands run in this development session and what they reported. Output was read, not assumed.
+
+docker run --rm --mount type=bind,source=D:/Dist_FP/Dist_FP,target=/src -w /src golang:1.25 sh -c "go test -race ./... && go vet ./..."
+PASS, exit 0. ok: cmd/control, internal/coordinator, internal/ledger, internal/storage, internal/telemetry.
+Other cmd packages have no standalone tests. 23 named Go test functions; race detector clean; vet clean.
+
+python -I -m unittest discover -s scripts -p "test_*.py"
+PASS: 35 tests (21 fault-checker tests, 14 evaluation-statistics tests).
+
+npm ci && npm test && npm run build   (in web/)
+PASS: 18 Vitest tests (Resilience lab scenario logic); TypeScript + Vite production build; the same build runs
+inside the dashboard container image.
+npm audit --omit=dev
+PASS: 0 vulnerabilities for the final dependency set (React 19, Recharts, Motion, Radix Dialog, Inter).
+
+docker compose up -d --build --no-deps dashboard
+PASS: only the dashboard container was rebuilt; the other ten services were not recreated.
+
+python -I scripts/chaos_check.py --seed 1 --duration 90 --workers 8
+PASS (run e2ec4860): 1,529 requests; 284 accepted, 1,183 rejected, 62 unknown outcomes; 134 samples,
+maximum observed grant 120 A, 0 violations, no duplicate committed versions; all seven faultable services
+restored; three coordinators converged on applied index 22,808. Evidence: artifacts/chaos-check.json.
+
+python -I scripts/evaluate.py
+Attempt history, all against the live stack:
+  1. FAIL in leader_failure trial 2: the repeated probe reused one building whose previous lease was still held,
+     and the ledger correctly refused a different session. Cause: test design. Fixed (fresh probe building per trial).
+  2. FAIL in end_to_end_latency: served amps were capped by a lease budget, so they did not follow demand.
+     Cause: test signal. Fixed (gateway-observed demand is the primary signal).
+  3. FAIL in gateway_crash trial 1: the trial assumed Hamra held a lease; another building held it (first-come
+     allocation). Cause: test assumption. Fixed (crash whichever real building holds a lease).
+  4. PASS (run f85446506835): all eleven phases; all controlled services restored; meters restored to 50 at
+     demand factor 1; 243 overview and 708 node samples, maximum observed grant 119 A, 0 violations.
+     Evidence: artifacts/evaluation.json.
+
+node scripts/browser-check.mjs
+PASS: 17 checks, 0 runtime errors, live WebSocket frames observed. Includes running the Resilience lab's
+leader-failover scenario from the UI and confirming every coordinator was restored afterwards.
+Evidence: artifacts/browser-check.json and dashboard-*.png screenshots (reviewed visually).
+
+python -I scripts/reset_demo.py
+Run before the browser checks and screenshots: returned the demo to a fair allocation after the 200-meter load.
+
+Artifacts: docs/Ishtirak_Project_Report.pdf rendered from docs/PROJECT_REPORT.md with ReportLab; pages 6-8 inspected
+visually. The PowerPoint is rendered with LibreOffice and inspected slide by slide.
+
+Observations worth knowing:
+- After a 200-meter run one building held a 107-111 A reservation while the other two showed expired leases (renewals
+  never shrink a reservation; allocation is first-come). The capacity invariant still held. This is documented as a
+  trade-off in the report; scripts/reset_demo.py restores a fair allocation.
+- One coordinator was found stopped (clean exit) by a single `stop` request through the dashboard's demo-controls API
+  before the first live run; its source was not identified. It was restored with the same controller before any test.
+
+Limits:
+This record summarizes executed commands; it is not an unedited shell transcript.
+Sampling is not an exhaustive proof. Timing assumptions and prototype limits are in the report.
+The test benchmarks run on one Docker host, with repeated trials on one stack rather than independent samples.
+Independent review so far consists of a read-only audit of the deliverables against the brief; it is not a formal verification.

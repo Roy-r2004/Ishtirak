@@ -1,0 +1,75 @@
+{
+  "checks": [
+    {
+      "name": "desktop has three buildings and three coordinators",
+      "passed": true
+    },
+    {
+      "name": "desktop has no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "live WebSocket frames received",
+      "passed": true
+    },
+    {
+      "name": "help dialog opens and receives focus",
+      "passed": true
+    },
+    {
+      "name": "Escape closes help dialog",
+      "passed": true
+    },
+    {
+      "name": "UI changes the real meter simulator to ten",
+      "passed": true
+    },
+    {
+      "name": "UI restores fifty meters",
+      "passed": true
+    },
+    {
+      "name": "audit table shows real events",
+      "passed": true
+    },
+    {
+      "name": "resilience lab shows four scenarios and the capacity proof",
+      "passed": true
+    },
+    {
+      "name": "resilience lab has no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "leader failover scenario completes from the UI",
+      "passed": true
+    },
+    {
+      "name": "every coordinator is restored after the scenario",
+      "passed": true
+    },
+    {
+      "name": "capacity proof reports no observed violation",
+      "passed": true
+    },
+    {
+      "name": "observed timeline recorded the leader change",
+      "passed": true
+    },
+    {
+      "name": "mobile has no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "mobile navigation opens",
+      "passed": true
+    },
+    {
+      "name": "no uncaught JavaScript errors",
+      "passed": true
+    }
+  ],
+  "runtime_errors": [],
+  "websocket_frames": 19,
+  "passed": true
+}

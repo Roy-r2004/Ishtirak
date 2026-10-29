@@ -1,0 +1,15 @@
+.env
+node_modules/
+web/dist/
+.workspaces/
+.workflow-setup/
+artifacts/chrome-profile/
+*.log
+*.zip
+*.tsbuildinfo
+__pycache__/
+Final-Project 2025.pdf
+docs/process/
+docs/superpowers/
+Ishtirak_Project_Proposal_slim.docx
+Ishtirak_Project_Flow.drawio

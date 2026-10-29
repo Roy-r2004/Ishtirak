@@ -1,0 +1,12 @@
+.workspaces
+.workflow-setup
+.git
+node_modules
+web/node_modules
+web/dist
+artifacts
+*.pdf
+*.docx
+*.drawio
+*.pptx
+.env
