@@ -1,8 +1,8 @@
 /**
- * Geometry and physics of the main ammeter. Pure functions: the dial component only draws what they return.
- * Angles are degrees measured from straight up, clockwise positive; 0 A sits at -SWEEP/2 and the mechanical stop at +SWEEP/2.
+ * Geometry and physics of the capacity gauge (a flat half circle). Pure functions: the gauge component only draws what they return.
+ * Angles are degrees measured from straight up, clockwise positive; 0 A sits at -SWEEP/2 and the end of the scale at +SWEEP/2.
  */
-export const SWEEP_DEG = 112
+export const SWEEP_DEG = 180
 /** The needle can travel this far past the capacity line before it hits its stop, so a violation would still show on the red arc. */
 export const OVERRUN = 1.1
 

@@ -51,15 +51,15 @@ try{
  const plateRows=await evaluate(`document.querySelectorAll('[data-testid=ledger-row]').length`);
  await press('ledger-open');await waitFor(()=>evaluate(`!!document.querySelector('[data-testid=ledger-door]')`),5000);await sleep(500);
  const doorRows=await evaluate(`document.querySelectorAll('[data-testid=ledger-door-row]').length`);
- check('Full ledger door shows the same events as the ledger plate',doorRows>0&&Math.abs(doorRows-plateRows)<=1,`${doorRows} in the door, ${plateRows} on the plate`);
- await shot('preview-door-ledger-1440x900.png',desktop,false);await esc();
+ check('Full log drawer shows the same events as the allocation log',doorRows>0&&Math.abs(doorRows-plateRows)<=1,`${doorRows} in the door, ${plateRows} on the plate`);
+ await shot('preview-drawer-log-1440x900.png',desktop,false);await esc();
  await press('cluster-open');await waitFor(()=>evaluate(`!!document.querySelector('[data-testid=cluster-door]')`),5000);await sleep(500);
  const cl=await evaluate(`({nodes:document.querySelectorAll('[data-testid=cluster-door-node]').length,facts:document.querySelectorAll('[data-testid=cluster-fact]').length,leaders:document.querySelectorAll('[data-testid=cluster-door-node][data-role=Leader]').length,unknown:document.querySelectorAll('[data-testid=cluster-door] td[data-unknown=true]').length,policy:document.querySelector('[data-fact=policy]').dataset.value,feed:document.querySelector('[data-fact=feed]').dataset.value})`);
  check('Cluster details door lists three coordinators (one leader) and seven facts',cl.nodes===3&&cl.facts===7&&cl.leaders===1,JSON.stringify(cl));
  check('demo coordinators report every raft field, so nothing reads unknown',cl.unknown===0,`${cl.unknown} unknown cells`);
- await shot('preview-door-cluster-1440x900.png',desktop,false);await esc();
+ await shot('preview-drawer-cluster-1440x900.png',desktop,false);await esc();
  await press('recorder-open-bottom');await waitFor(()=>evaluate(`!!document.querySelector('[data-testid=recorder]')`),5000);await sleep(800);
- await shot('preview-tray-1440x900.png',desktop,false);await esc();
+ await shot('preview-chart-1440x900.png',desktop,false);await esc();
  // demo interactions: 200 meters under first come (a hog), then fair share (convergence)
  await press('policy-first_come');await waitFor(()=>evaluate(`document.querySelector('[data-testid=policy-first_come]').getAttribute('aria-checked')==='true'`),15000);
  check('policy switch commits first come in the simulator',true);
@@ -78,7 +78,7 @@ try{
  check('still no violation after the policy change',Number(s.violations)===0&&Number(s.reserved)<=120,`${s.reserved} A`);
  await shot('preview-fair-1440x900.png',desktop,false);
  // leader failover through the guarded button
- await press('meters-50');await press('sim-apply');await sleep(1500);
+ await press('meters-50');await press('sim-apply');await sleep(1500);await press('tab-tests');await sleep(300);
  await evaluate(`document.querySelector('[data-testid=scenario][data-scenario=leader-failover] [data-testid=scenario-cover]').click()`);await sleep(700);
  await evaluate(`document.querySelector('[data-testid=scenario][data-scenario=leader-failover] [data-testid=scenario-run]').click()`);
  await waitFor(()=>evaluate(`document.querySelector('[data-testid=scenario-status]')?.textContent.includes('Completed')`),120000);
@@ -90,15 +90,15 @@ try{
  await call('Emulation.setDeviceMetricsOverride',{width:mobile.w,height:mobile.h,deviceScaleFactor:1,mobile:true});await sleep(1200);
  check('no horizontal overflow at 390',await evaluate(`document.documentElement.scrollWidth<=innerWidth`),await evaluate(`document.documentElement.scrollWidth+'/'+innerWidth`));
  await shot('preview-390x844.png',mobile,false);
- for(const [opener,door,file] of [['ledger-open','ledger-door','preview-door-ledger-390x844.png'],['cluster-open','cluster-door','preview-door-cluster-390x844.png']]){
+ for(const [opener,door,file] of [['ledger-open','ledger-door','preview-drawer-log-390x844.png'],['cluster-open','cluster-door','preview-drawer-cluster-390x844.png']]){
   await press(opener);await waitFor(()=>evaluate(`!!document.querySelector('[data-testid=${door}]')`),5000);await sleep(600);
   check(`${door} fits the phone screen without horizontal page overflow`,await evaluate(`document.documentElement.scrollWidth<=innerWidth&&document.querySelector('[data-testid=${door}]').getBoundingClientRect().right<=innerWidth+1`));
-  check(`${door} table shows every column without scrolling sideways`,await evaluate(`(()=>{const t=document.querySelector('[data-testid=${door}] .tape-door, [data-testid=${door}] .door-table');return t.scrollWidth<=t.clientWidth+1})()`),await evaluate(`(()=>{const t=document.querySelector('[data-testid=${door}] .tape-door, [data-testid=${door}] .door-table');return t.scrollWidth+' wide in '+t.clientWidth})()`));
+  check(`${door} table shows every column without scrolling sideways`,await evaluate(`(()=>{const t=document.querySelector('[data-testid=${door}] .table-door');return t.scrollWidth<=t.clientWidth+1})()`),await evaluate(`(()=>{const t=document.querySelector('[data-testid=${door}] .table-door');return t.scrollWidth+' wide in '+t.clientWidth})()`));
   await shot(file,mobile,false);await esc();
  }
  await press('recorder-open-bottom');await waitFor(()=>evaluate(`!!document.querySelector('[data-testid=recorder]')`),5000);await sleep(1200);
- check('on a phone the tray opened from the bottom button is scrolled into view',await evaluate(`(()=>{const r=document.querySelector('[data-testid=recorder]').getBoundingClientRect();return r.bottom>0&&r.top<innerHeight})()`));
- await shot('preview-tray-390x844.png',mobile,false);await esc();
+ check('on a phone the chart opened from the Chart tab is scrolled into view',await evaluate(`(()=>{const r=document.querySelector('[data-testid=recorder]').getBoundingClientRect();return r.bottom>0&&r.top<innerHeight})()`));
+ await shot('preview-chart-390x844.png',mobile,false);await esc();
  await evaluate(`window.scrollTo(0,0)`);await sleep(300);
  await shot('preview-390x844-full.png',mobile,true);
  check('no request left the file (no http, https or WebSocket)',report.external.length===0,report.external.join(', ')||'none');

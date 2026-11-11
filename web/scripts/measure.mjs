@@ -27,7 +27,7 @@ try{
   await call('Page.navigate',{url:base});
   for(let i=0;i<150;i++){if(await evaluate(`document.querySelectorAll('[data-testid=feeder]').length===3&&document.querySelector('[data-testid=main-ammeter]')?.dataset.selftest==='false'`).catch(()=>false))break;await sleep(200)}
   await sleep(1500);
-  const m=await evaluate(`(()=>{const b=document.querySelector('.board'),keep=b.style.minHeight;b.style.minHeight='0';const pad=parseFloat(getComputedStyle(document.querySelector('.cabinet')).paddingTop)*2;const natural=Math.round(b.getBoundingClientRect().height+pad);const z={};for(const k of ['.top','.ammeter','.council','.feeders','.ledger','.test','.board-foot','.capacity-strip']){const e=document.querySelector(k);if(e)z[k]=Math.round(e.getBoundingClientRect().height)}b.style.minHeight=keep;return{naturalPage:natural,scrollH:document.documentElement.scrollHeight,scrollW:document.documentElement.scrollWidth,zones:z}})()`);
+  const m=await evaluate(`(()=>{const b=document.querySelector('.console'),keep=b.style.minHeight;b.style.minHeight='0';const pad=parseFloat(getComputedStyle(document.body).paddingTop||0)*2;const natural=Math.round(b.getBoundingClientRect().height+pad);const z={};for(const k of ['.topbar','.main','.diagram','.sld','.cluster','.side','.capacity','.coordinators','.dock']){const e=document.querySelector(k);if(e)z[k]=Math.round(e.getBoundingClientRect().height)}b.style.minHeight=keep;return{naturalPage:natural,scrollH:document.documentElement.scrollHeight,scrollW:document.documentElement.scrollWidth,zones:z}})()`);
   console.log(`${w}x${h} ${state}: natural page ${m.naturalPage}px, scrollHeight ${m.scrollH}px (${m.scrollH>h?'scrolls by '+(m.scrollH-h)+'px':'fits'}), scrollWidth ${m.scrollW}`,JSON.stringify(m.zones));
  }
 }finally{

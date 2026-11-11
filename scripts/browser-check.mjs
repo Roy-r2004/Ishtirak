@@ -18,6 +18,8 @@ async function evaluate(expression){const r=await call('Runtime.evaluate',{expre
 const q=id=>`[data-testid=${JSON.stringify(id)}]`;
 // Click the first element with this test id, or the one inside `within` (a selector).
 async function click(testid,within=''){return evaluate(`(()=>{const e=document.querySelector(${JSON.stringify((within?within+' ':'')+q(testid))});if(!e)throw Error('Missing ${testid}');e.click();return true})()`)}
+// The dock shows one panel at a time: open a tab (a real click) before using what is inside it.
+const openTab=async tab=>{await click(tab);await sleep(300)};
 const overview=async()=>(await fetch(`${base}/api/overview`)).json();
 // Set a controlled input or select the way a person would, so React sees the change.
 const setValue=(testid,value)=>evaluate(`(()=>{const e=document.querySelector('[data-testid="${testid}"]');const sel=e instanceof HTMLSelectElement;Object.getOwnPropertyDescriptor(sel?HTMLSelectElement.prototype:HTMLInputElement.prototype,'value').set.call(e,${JSON.stringify(value)});e.dispatchEvent(new Event(sel?'change':'input',{bubbles:true}));return true})()`);
@@ -55,53 +57,55 @@ try{
  await sleep(400); // focus is restored in a timeout after the dialog unmounts
  report.focus_after_escape=await evaluate(`(()=>{const a=document.activeElement;return a?a.tagName+(a.dataset?.testid?'['+a.dataset.testid+']':''):'none'})()`);
  check('focus returns to the button that opened the dialog',report.focus_after_escape==='BUTTON[help-open]');
- await click('meters-10');await click('sim-apply');
+ await openTab('tab-sim');await click('meters-10');await click('sim-apply');
  await waitFor(async()=>(await overview()).meters.data.meter_count===10);
  check('UI changes the real meter simulator to ten',true);
  await waitFor(()=>evaluate(`!document.querySelector('[data-testid="sim-apply"]').disabled`));
  await click('meters-50');await click('sim-apply');
  await waitFor(async()=>(await overview()).meters.data.meter_count===50);
  check('UI restores fifty meters',true);
+ await openTab('tab-log');
  check('ledger shows real events',await evaluate(`document.querySelectorAll('[data-testid="ledger-row"]').length>0`));
  // ---- capacity readout beside the dial: free, served and curtailed, from real observations ----
  const fig=await evaluate(`(()=>{const v=id=>document.querySelector('[data-testid="'+id+'"]');const a=v('main-ammeter').dataset;return{capacity:Number(a.capacity),reserved:Number(a.reserved),free:v('free-readout').dataset.value,served:v('served-readout').dataset.value,curtailed:v('curtailed-readout').dataset.value,text:['free-readout','served-readout','curtailed-readout'].map(id=>v(id).textContent)}})()`);
  check('free figure is capacity minus reserved',fig.free!==''&&Math.abs(Number(fig.free)-Math.max(0,fig.capacity-fig.reserved))<=0.11);
  check('served and curtailed figures are real numbers and curtailed is never negative',fig.served!==''&&fig.curtailed!==''&&Number(fig.served)>=0&&Number(fig.curtailed)>=0&&fig.text.every(t=>/\d(\.\d)? A$/.test(t)));
- // ---- Full ledger door ----
+ // ---- Full log door ----
  await focusClick('ledger-open');await waitFor(()=>evaluate(`!!document.querySelector('[data-testid="ledger-door"]')`),5000);await sleep(300);
- check('Full ledger door opens and takes focus',await inDialog('ledger-door'));
+ check('Full log drawer opens and takes focus',await inDialog('ledger-door'));
  const leaderAudit=(await overview()).nodes.find(n=>n.online&&n.data?.state==='Leader')?.data?.audit??[];
  const doorRows=await evaluate(`document.querySelectorAll('[data-testid="ledger-door-row"]').length`);
- check('Full ledger lists every event the leader holds, up to 100',doorRows>0&&Math.abs(doorRows-Math.min(100,leaderAudit.length))<=2);
- check('Full ledger rows are newest first with all six columns',await evaluate(`(()=>{const ids=[...document.querySelectorAll('[data-testid="ledger-door-row"]')].map(r=>Number(r.querySelector('th').textContent));const head=[...document.querySelectorAll('[data-testid="ledger-door"] thead th')].map(h=>h.textContent);return ids.every((v,i)=>i===0||ids[i-1]>v)&&head.join()==='Event,Building,Entry,Amps,Version,Time'})()`));
+ check('Full log lists every event the leader holds, up to 100',doorRows>0&&Math.abs(doorRows-Math.min(100,leaderAudit.length))<=2);
+ check('Full log rows are newest first with all six columns',await evaluate(`(()=>{const ids=[...document.querySelectorAll('[data-testid="ledger-door-row"]')].map(r=>Number(r.querySelector('th').textContent));const head=[...document.querySelectorAll('[data-testid="ledger-door"] thead th')].map(h=>h.textContent);return ids.every((v,i)=>i===0||ids[i-1]>v)&&head.join()==='Event,Building,Entry,Amps,Version,Time'})()`));
  await setValue('ledger-door-filter','granted');await sleep(300);
- check('Full ledger kind filter narrows the rows and the caption counts them',await evaluate(`(()=>{const r=[...document.querySelectorAll('[data-testid="ledger-door-row"]')];const c=document.querySelector('[data-testid="ledger-door-caption"]').textContent;return r.length>0&&r.every(x=>x.dataset.kind==='granted')&&c.includes(r.length+' event')&&c.includes('matching')&&c.includes('PostgreSQL')})()`));
+ check('Full log kind filter narrows the rows and the caption counts them',await evaluate(`(()=>{const r=[...document.querySelectorAll('[data-testid="ledger-door-row"]')];const c=document.querySelector('[data-testid="ledger-door-caption"]').textContent;return r.length>0&&r.every(x=>x.dataset.kind==='granted')&&c.includes(r.length+' event')&&c.includes('matching')&&c.includes('PostgreSQL')})()`));
  await setValue('ledger-door-filter','all');await setValue('ledger-door-search','zzz-no-such-entry');await sleep(300);
- check('Full ledger search with no match shows no rows',await evaluate(`document.querySelectorAll('[data-testid="ledger-door-row"]').length===0`));
- check('Full ledger offers the Tear off export',await evaluate(`!document.querySelector('[data-testid="ledger-door-tear"]').disabled`));
+ check('Full log search with no match shows no rows',await evaluate(`document.querySelectorAll('[data-testid="ledger-door-row"]').length===0`));
+ check('Full log offers the Tear off export',await evaluate(`!document.querySelector('[data-testid="ledger-door-tear"]').disabled`));
  await escape();
- check('Escape closes the Full ledger door',await evaluate(`!document.querySelector('[data-testid="ledger-door"]')`));
- check('focus returns to the Full ledger button',await focusIs('ledger-open'));
- // ---- Cluster details door ----
+ check('Escape closes the Full log drawer',await evaluate(`!document.querySelector('[data-testid="ledger-door"]')`));
+ check('focus returns to the Full log button',await focusIs('ledger-open'));
+ // ---- Cluster details drawer ----
  await focusClick('cluster-open');await waitFor(()=>evaluate(`!!document.querySelector('[data-testid="cluster-door"]')`),5000);await sleep(300);
- check('Cluster details door opens and takes focus',await inDialog('cluster-door'));
+ check('Cluster details drawer opens and takes focus',await inDialog('cluster-door'));
  const ov=await overview();const upNodes=ov.nodes.filter(n=>n.online).length;
  check('Cluster details lists every coordinator',await evaluate(`document.querySelectorAll('[data-testid="cluster-door-node"]').length===${ov.nodes.length}`));
  check('Cluster details shows exactly one leader and the right reachable count',await evaluate(`document.querySelectorAll('[data-testid="cluster-door-node"][data-role="Leader"]').length===1&&document.querySelector('[data-testid="cluster-fact"][data-fact="reachable"]').dataset.value==='${upNodes} of ${ov.nodes.length}'`));
  check('Cluster details states the database, majority, live feed and policy',await evaluate(`['postgres','majority','verified-at','feed','policy','fairness'].every(k=>{const e=document.querySelector('[data-testid="cluster-fact"][data-fact="'+k+'"]');return e&&e.dataset.value!==''})&&document.querySelector('[data-testid="cluster-fact"][data-fact="postgres"]').dataset.value==='Connected'&&document.querySelector('[data-testid="cluster-fact"][data-fact="majority"]').dataset.value==='Verified'`));
  await escape();
- check('Escape closes the Cluster details door',await evaluate(`!document.querySelector('[data-testid="cluster-door"]')`));
+ check('Escape closes the Cluster details drawer',await evaluate(`!document.querySelector('[data-testid="cluster-door"]')`));
  check('focus returns to the Cluster details button',await focusIs('cluster-open'));
  // ---- second Chart recorder button, same tray ----
  await focusClick('recorder-open-bottom');await waitFor(()=>evaluate(`!!document.querySelector('[data-testid="recorder"]')`),5000);await sleep(300);
- check('bottom Chart recorder button opens the one tray and both buttons show it expanded',await evaluate(`document.querySelectorAll('[data-testid="recorder"]').length===1&&document.querySelector('[data-testid="recorder-open"]').getAttribute('aria-expanded')==='true'&&document.querySelector('[data-testid="recorder-open-bottom"]').getAttribute('aria-expanded')==='true'`));
+ check('the Chart tab opens the one chart and both Chart controls show it expanded',await evaluate(`document.querySelectorAll('[data-testid="recorder"]').length===1&&document.querySelector('[data-testid="recorder-open"]').getAttribute('aria-expanded')==='true'&&document.querySelector('[data-testid="recorder-open-bottom"]').getAttribute('aria-expanded')==='true'`));
  await click('recorder-close');await sleep(500);
- check('closing the tray returns focus to the bottom button that opened it',await focusIs('recorder-open-bottom'));
+ check('Hide chart returns focus to the Chart tab that opened it',await focusIs('recorder-open-bottom'));
  await focusClick('recorder-open');await waitFor(()=>evaluate(`!!document.querySelector('[data-testid="recorder"]')`),5000);await escape();
- check('the top button opens the same tray and Escape returns focus to it',await evaluate(`!document.querySelector('[data-testid="recorder"]')`)&&await focusIs('recorder-open'));
+ check('the Chart button in the capacity panel opens the same chart and Escape returns focus to it',await evaluate(`!document.querySelector('[data-testid="recorder"]')`)&&await focusIs('recorder-open'));
  check('four scenarios and the capacity proof exist',await evaluate(`document.querySelectorAll('[data-testid="scenario"]').length===4&&[...document.querySelectorAll('[data-testid="scenario"]')].every(s=>s.dataset.scenario&&s.querySelector('[data-testid="scenario-run"]'))&&!!document.querySelector('[data-testid="capacity-proof"]')&&!!document.querySelector('[data-testid="scenario-status"]')`));
  check('overload run and policy switch exist',await evaluate(`!!document.querySelector('[data-testid="overload-run"]')&&!!document.querySelector('[data-testid="policy-switch"]')`));
  await sleep(1500);
+ await openTab('tab-tests');await sleep(300);
  await pressGuarded('leader-failover','scenario-cover','scenario-run');
  await waitFor(()=>evaluate(`document.querySelector('[data-testid="scenario-status"]')?.textContent.includes('Completed')`),240000);
  check('leader failover scenario completes from the UI',true);

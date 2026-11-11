@@ -9,10 +9,10 @@ const chrome=process.env.CHROME_PATH||'C:/Program Files/Google/Chrome/Applicatio
 const mockPort=Number(process.env.MOCK_PORT||8099), cdpPort=9341, base=`http://127.0.0.1:${mockPort}`;
 const args=process.argv.slice(2), only=(args.find(a=>a.startsWith('--only='))||'').slice(7), wanted=args.filter(a=>!a.startsWith('--'));
 const viewports={desktop:{w:1440,h:900,mobile:false,full:false},laptop:{w:1280,h:720,mobile:false,full:true},mobile:{w:390,h:844,mobile:true,full:true}};
-const states=['healthy','hog','node-down','stale','majority-lost','scenario','door-ledger','door-cluster','door-cluster-down','tray-bottom'];
+const states=['healthy','hog','node-down','stale','majority-lost','tab-tests','tab-sim','tab-chart','confirm-scenario','confirm-breaker','running','drawer-log','drawer-cluster','drawer-cluster-down','drawer-building','drawer-about','dark','dark-majority-lost'];
 // States that open one of the doors (or the chart recorder tray) on top of a preset.
-const presetFor={stale:'healthy',scenario:'healthy','door-ledger':'healthy','door-cluster':'healthy','door-cluster-down':'majority-lost','tray-bottom':'healthy'};
-const opener={'door-ledger':'ledger-open','door-cluster':'cluster-open','door-cluster-down':'cluster-open','tray-bottom':'recorder-open-bottom'};
+const presetFor={stale:'healthy','drawer-cluster-down':'majority-lost','dark-majority-lost':'majority-lost'};
+const opener={'drawer-log':'ledger-open','drawer-cluster':'cluster-open','drawer-cluster-down':'cluster-open','drawer-building':'feeder-open','drawer-about':'help-open','tab-tests':'tab-tests','tab-sim':'tab-sim','tab-chart':'recorder-open-bottom','confirm-scenario':'tab-tests','confirm-breaker':'feeder-breaker','running':'tab-tests'};
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const mock=spawn(process.execPath,[path.join(root,'mock','server.mjs')],{env:{...process.env,PORT:String(mockPort),STATIC_DIR:path.join(root,'dist')},stdio:'ignore',windowsHide:true});
 const child=spawn(chrome,['--headless=new','--disable-gpu','--no-first-run','--no-default-browser-check','--hide-scrollbars',`--remote-debugging-port=${cdpPort}`,`--user-data-dir=${profile}`,'about:blank'],{windowsHide:true,stdio:'ignore'});
@@ -40,14 +40,18 @@ try{
   if(only&&only!==name)continue;
   for(const state of states){
    if(wanted.length&&!wanted.includes(state))continue;
-   await setState(presetFor[state]??state);
+   await setState(presetFor[state]??(['healthy','hog','node-down','majority-lost'].includes(state)?state:'healthy'));
    await call('Emulation.setDeviceMetricsOverride',{width:vp.w,height:vp.h,deviceScaleFactor:1,mobile:vp.mobile});
    await call('Page.navigate',{url:base});
    await waitFor(()=>evaluate(`document.querySelectorAll('[data-testid=feeder]').length===3&&document.querySelector('[data-testid=main-ammeter]')?.dataset.selftest==='false'`),30000);
    await sleep(state==='healthy'?3500:2500);
    if(state==='stale'){await setState('stale');await waitFor(()=>evaluate(`document.querySelector('[data-testid=main-ammeter]').dataset.fresh==='false'`),15000);await sleep(1500)}
-   if(opener[state]){await evaluate(`document.querySelector('[data-testid=${opener[state]}]').click()`);await sleep(1200)}
-   if(state==='scenario'){
+   if(state.startsWith('dark'))await evaluate(`document.documentElement.dataset.theme='dark'`);
+   if(opener[state]){await evaluate(`document.querySelector('[data-testid=${opener[state]}]').click()`);await sleep(900)}
+   if(state==='confirm-scenario'||state==='running'){await evaluate(`document.querySelector('[data-testid=scenario][data-scenario=leader-failover] [data-testid=scenario-cover]').click()`);await sleep(500)}
+   if(state==='running'){await evaluate(`document.querySelector('[data-testid=scenario][data-scenario=leader-failover] [data-testid=scenario-run]').click()`);await sleep(3500)}
+   if(/^(tab|confirm|running)/.test(state))await evaluate(`document.querySelector('[data-testid=${state==='confirm-breaker'?'feeders':'dock'}]').scrollIntoView({block:'center'})`);
+   if(false){
     await evaluate(`(()=>{const s=document.querySelector('[data-testid=scenario][data-scenario=leader-failover]');s.querySelector('[data-testid=scenario-cover]').click()})()`);await sleep(700);
     await evaluate(`document.querySelector('[data-testid=scenario][data-scenario=leader-failover] [data-testid=scenario-run]').click()`);await sleep(3800);
    }

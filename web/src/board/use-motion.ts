@@ -15,8 +15,9 @@ export function useReducedMotion(): boolean {
 }
 
 /**
- * Drives `apply(position)` every animation frame with a damped spring toward `target`, and stops the loop when the needle has settled.
+ * Drives `apply(position)` every animation frame with a damped spring toward `target`, and stops the loop when the value has settled.
  * With reduced motion the position jumps straight to the target. `apply` writes to the DOM directly so React never re-renders at frame rate.
+ * This is the only animation that runs on its own, and only while a reading is changing.
  */
 export function useSpring(target: number, apply: (position: number) => void, reduced: boolean, params = SPRING) {
   const state = useRef<Spring>({ pos: 0, vel: 0 }), goal = useRef(target), raf = useRef(0), applyRef = useRef(apply), lastFrame = useRef(0)
@@ -37,14 +38,18 @@ export function useSpring(target: number, apply: (position: number) => void, red
   }, [target, reduced])
 }
 
-export type SelfTestPhase = 'up' | 'down' | 'done'
-/** The one orchestrated moment: on load every lamp lights and the needle sweeps to full scale and back. Skipped with reduced motion. */
-export function useSelfTest(reduced: boolean): SelfTestPhase {
-  const [phase, setPhase] = useState<SelfTestPhase>(() => reduced ? 'done' : 'up')
+/** The pixel size of an element, kept current. Charts are drawn at this size so their text is never stretched. */
+export function useSize<T extends HTMLElement>(): [React.RefObject<T | null>, { width: number; height: number }] {
+  const ref = useRef<T>(null), [size, setSize] = useState({ width: 0, height: 0 })
   useEffect(() => {
-    if (reduced) { setPhase('done'); return }
-    const down = setTimeout(() => setPhase('down'), 1100), done = setTimeout(() => setPhase('done'), 2300)
-    return () => { clearTimeout(down); clearTimeout(done) }
-  }, [reduced])
-  return phase
+    const el = ref.current
+    if (!el) return
+    const read = () => setSize(prev => { const w = Math.round(el.clientWidth), h = Math.round(el.clientHeight); return prev.width === w && prev.height === h ? prev : { width: w, height: h } })
+    read()
+    if (typeof ResizeObserver !== 'function') return
+    const ro = new ResizeObserver(read)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  return [ref, size]
 }

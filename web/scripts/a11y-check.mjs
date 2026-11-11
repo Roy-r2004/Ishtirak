@@ -16,17 +16,27 @@ async function evaluate(expression){const r=await call('Runtime.evaluate',{expre
 async function waitFor(fn,timeout=20000){const end=Date.now()+timeout;while(Date.now()<end){try{if(await fn())return}catch{}await sleep(200)}throw Error('Browser condition timed out: '+String(fn).slice(0,120))}
 const KEYS={Tab:{key:'Tab',code:'Tab',windowsVirtualKeyCode:9},Enter:{key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r'},Space:{key:' ',code:'Space',windowsVirtualKeyCode:32,text:' '},Escape:{key:'Escape',code:'Escape',windowsVirtualKeyCode:27},ArrowRight:{key:'ArrowRight',code:'ArrowRight',windowsVirtualKeyCode:39},ArrowLeft:{key:'ArrowLeft',code:'ArrowLeft',windowsVirtualKeyCode:37}};
 async function key(name,modifiers=0){const k=KEYS[name];await call('Input.dispatchKeyEvent',{type:k.text?'keyDown':'rawKeyDown',modifiers,...k});await call('Input.dispatchKeyEvent',{type:'keyUp',modifiers,key:k.key,code:k.code,windowsVirtualKeyCode:k.windowsVirtualKeyCode});await sleep(120)}
-const focusTestId=(testid,within='')=>evaluate(`(()=>{const e=document.querySelector(${JSON.stringify((within?within+' ':'')+'[data-testid="'+testid+'"]')});if(!e)throw Error('missing ${testid}');e.focus();return document.activeElement===e})()`);
-const active=()=>evaluate(`(()=>{const a=document.activeElement;if(!a||a===document.body)return{tag:'BODY'};const rangeThumb=a.matches('input[type=range]');const cs=getComputedStyle(a,rangeThumb?'::-webkit-slider-thumb':null);const ring=(cs.outlineStyle!=='none'&&parseFloat(cs.outlineWidth)>0)||cs.boxShadow!=='none';return{tag:a.tagName,range:rangeThumb,testid:a.dataset.testid||'',label:(a.getAttribute('aria-label')||a.textContent||a.className&&a.className.baseVal===undefined&&a.className||'').trim().replace(/\\s+/g,' ').slice(0,48),ring,inDialog:!!a.closest('[role=dialog]')}})()`);
+const q=(testid,within='')=>JSON.stringify((within?within+' ':'')+'[data-testid="'+testid+'"]');
+const focusTestId=(testid,within='')=>evaluate(`(()=>{const e=document.querySelector(${q(testid,within)});if(!e)throw Error('missing ${testid}');e.focus();return document.activeElement===e})()`);
+const active=()=>evaluate(`(()=>{const a=document.activeElement;if(!a||a===document.body)return{tag:'BODY'};const cs=getComputedStyle(a);const ring=cs.outlineStyle!=='none'&&parseFloat(cs.outlineWidth)>=2;return{tag:a.tagName,testid:a.dataset.testid||'',label:(a.getAttribute('aria-label')||a.textContent||'').trim().replace(/\\s+/g,' ').slice(0,48),ring,inDialog:!!a.closest('[role=dialog]')}})()`);
+const focusIs=testid=>evaluate(`document.activeElement===document.querySelector(${q(testid)})`);
 async function load(reduced){
  await call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:reduced?'reduce':'no-preference'}]});
  await call('Page.navigate',{url});
- const start=Date.now();
  await waitFor(()=>evaluate(`!!document.querySelector('[data-testid="main-ammeter"]')`),30000);
  const early=await evaluate(`document.querySelector('[data-testid="main-ammeter"]').dataset.selftest`);
- await waitFor(()=>evaluate(`document.querySelectorAll('[data-testid=feeder]').length===3&&document.querySelector('[data-testid="main-ammeter"]').dataset.selftest==='false'&&document.querySelector('[data-testid="main-ammeter"]').dataset.fresh==='true'`),30000);
- return {early,ms:Date.now()-start};
+ await waitFor(()=>evaluate(`document.querySelectorAll('[data-testid=feeder]').length===3&&document.querySelector('[data-testid="main-ammeter"]').dataset.fresh==='true'`),30000);
+ return {early};
 }
+// Walk every tab stop once from the top of the page and report them.
+async function walk(limit=120){
+ await evaluate(`document.activeElement&&document.activeElement.blur();window.scrollTo(0,0)`);
+ const stops=[];
+ for(let i=0;i<limit;i++){await key('Tab');const s=await active();if(s.tag==='BODY')break;stops.push(s)}
+ return stops;
+}
+const countOf=(stops,t)=>stops.filter(s=>s.testid===t).length;
+const openTabByKey=async tab=>{await focusTestId(tab);await key('Enter');await sleep(250)};
 try{
  for(let i=0;i<100;i++){try{if((await fetch(`http://127.0.0.1:${port}/json/list`)).ok)break}catch{}await sleep(200)}
  const targets=await(await fetch(`http://127.0.0.1:${port}/json/list`)).json();
@@ -35,17 +45,21 @@ try{
  await call('Runtime.enable');await call('Page.enable');await call('Emulation.setFocusEmulationEnabled',{enabled:true});
  await call('Emulation.setDeviceMetricsOverride',{width:1440,height:900,deviceScaleFactor:1,mobile:false});
 
- // ---- reduced motion ----
- let r=await load(true);
- check('reduced motion: the load self-test is skipped',r.early==='false',`selftest=${r.early} right after first paint`);
- const rm=await evaluate(`(()=>{const d=s=>{const e=document.querySelector(s);return e?getComputedStyle(e).transitionDuration:'n/a'};return{lever:d('.lever-handle'),knob:d('.knob'),meter:d('.meter-bar i')}})()`);
+ // ---- motion ----
+ const infinite=()=>evaluate(`document.getAnimations().filter(a=>a.effect&&a.effect.getTiming().iterations===Infinity).length`);
+ const dur=s=>evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(s)});return e?getComputedStyle(e).transitionDuration:'n/a'})()`);
  const tiny=v=>v.split(',').every(x=>parseFloat(x)<=0.001);
- check('reduced motion: lever and knob transitions are effectively instant',tiny(rm.lever)&&tiny(rm.knob),JSON.stringify(rm));
- const jump=await evaluate(`(async()=>{const n=document.querySelector('.needle');const target=Number(document.querySelector('[data-testid="main-ammeter"]').dataset.reserved);const seen=new Set();for(let i=0;i<8;i++){seen.add(n.getAttribute('transform'));await new Promise(r=>setTimeout(r,60))}return{target,distinct:seen.size}})()`);
- check('reduced motion: the needle is not mid-spring',jump.distinct<=2,`${jump.distinct} distinct needle positions in 0.5 s at ${jump.target} A`);
- // ---- normal motion contrast: the self-test does run ----
+ let r=await load(true);
+ check('reduced motion: there is no startup lamp test, the console is ready at first paint',r.early==='false');
+ check('reduced motion: nothing animates on its own',(await infinite())===0);
+ const rm={btn:await dur('.btn'),vote:await dur('.vote-boxes i'),wire:await dur('.drop')};
+ check('reduced motion: control, indicator and wire transitions are effectively instant',tiny(rm.btn)&&tiny(rm.vote)&&tiny(rm.wire),JSON.stringify(rm));
+ const jump=await evaluate(`(async()=>{const n=document.querySelector('.g-needle');const seen=new Set();for(let i=0;i<8;i++){seen.add(n.getAttribute('transform'));await new Promise(r=>setTimeout(r,60))}return{target:Number(document.querySelector('[data-testid="main-ammeter"]').dataset.reserved),distinct:seen.size}})()`);
+ check('reduced motion: the gauge needle is not mid-easing',jump.distinct<=2,`${jump.distinct} distinct needle positions in 0.5 s at ${jump.target} A`);
  r=await load(false);
- check('normal motion: the load self-test runs (lamps lit, needle sweeps)',r.early==='true',`selftest=${r.early} right after first paint, finished after ${(r.ms/1000).toFixed(1)} s`);
+ check('normal motion: no startup lamp test either, and nothing animates on its own',r.early==='false'&&(await infinite())===0);
+ const nm={vote:await dur('.vote-boxes i'),wire:await dur('.drop')};
+ check('normal motion: a changing value does ease (indicators and wires have a short transition)',!tiny(nm.vote)&&!tiny(nm.wire),JSON.stringify(nm));
 
  // ---- keyboard only ----
  await call('Page.navigate',{url:'about:blank'});await load(false);
@@ -54,88 +68,110 @@ try{
  let a=await active();
  check('first Tab stop is the skip link and it shows a focus ring',a.tag==='A'&&/skip/i.test(a.label)&&a.ring,JSON.stringify(a));
  await key('Enter');
- check('skip link moves focus to the board',await evaluate(`document.activeElement===document.querySelector('[data-testid="board"]')`));
- // Walk every tab stop once.
- await evaluate(`document.activeElement.blur()`);
- const stops=[];let trapped=false;
- for(let i=0;i<260;i++){await key('Tab');const s=await active();if(s.tag==='BODY'){break}stops.push(s)}
+ check('skip link moves focus to the console',await evaluate(`document.activeElement===document.querySelector('[data-testid="board"]')`));
+ // The skip link leaves the keyboard starting point at the console, so the full walk starts from a fresh load.
+ await call('Page.navigate',{url:'about:blank'});await load(false);
+ let stops=await walk();
  const ids=stops.map(s=>`${s.tag}|${s.testid}|${s.label}`);
- const count=t=>stops.filter(s=>s.testid===t).length;
- const wanted={'help-open':1,'recorder-open':1,'relay-cover':3,'feeder-open':3,'feeder-breaker':3,'ledger-search':1,'ledger-filter':1,'ledger-tear':1,'scenario-cover':4,'overload-cover':1,'sim-apply':1,'breaker-database':1,'breaker-broker':1,'fader':1,'ledger-open':1,'cluster-open':1,'recorder-open-bottom':1};
- const missing=Object.entries(wanted).filter(([t,n])=>t==='fader'?!stops.some(s=>s.tag==='INPUT'):count(t)!==n).map(([t,n])=>`${t} x${n}`);
+ const wanted={'policy-fair_share':1,'help-open':1,'recorder-open':1,'cluster-open':1,'relay-cover':3,'feeder-open':3,'feeder-breaker':3,'ledger-search':1,'ledger-filter':1,'ledger-tear':1,'ledger-open':1,'tab-log':1};
+ const missing=Object.entries(wanted).filter(([t,n])=>countOf(stops,t)!==n).map(([t,n])=>`${t} x${n} (found ${countOf(stops,t)})`);
  check('Tab reaches each main control exactly once',missing.length===0,missing.length?'wrong or missing: '+missing.join(', '):`${stops.length} tab stops`);
- check('Tab leaves the page after the last control and never repeats a stop (no keyboard trap)',stops.length<250&&new Set(ids).size===ids.length,`${stops.length} stops, ${new Set(ids).size} distinct`);
- // A range input's ring lives on its thumb pseudo-element, which getComputedStyle cannot report; it is judged from a screenshot instead.
- const noRing=stops.filter(s=>!s.ring&&!s.range).map(s=>`${s.tag}[${s.testid||s.label}]`);
- check('every tab stop shows a visible focus ring (the range fader is judged from shots/a11y-focus-fader.png)',noRing.length===0,noRing.length?noRing.join(', '):`${stops.length-stops.filter(s=>s.range).length} of ${stops.length}`);
+ check('the dock tab strip is one tab stop (arrow keys move inside it)',countOf(stops,'tab-log')+countOf(stops,'tab-tests')+countOf(stops,'tab-sim')+countOf(stops,'recorder-open-bottom')===1);
+ check('Tab leaves the page after the last control and never repeats a stop (no keyboard trap)',stops.length<120&&new Set(ids).size===ids.length,`${stops.length} stops, ${new Set(ids).size} distinct`);
+ const noRing=stops.filter(s=>!s.ring).map(s=>`${s.tag}[${s.testid||s.label}]`);
+ check('every tab stop shows a visible focus ring',noRing.length===0,noRing.length?noRing.join(', '):`${stops.length} of ${stops.length}`);
  report.tab_order=ids;
- const clip=async(name,selector)=>{const b=await evaluate(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return{x:Math.max(0,r.x-14),y:Math.max(0,r.y-14),width:r.width+28,height:r.height+28}})()`);const r=await call('Page.captureScreenshot',{format:'png',clip:{...b,scale:2}});await writeFile(path.join(root,'shots',name),Buffer.from(r.data,'base64'));console.log('saved',path.join(root,'shots',name))};
- await evaluate(`document.activeElement.blur()`);await focusTestId('feeder-breaker','[data-building=hamra]');await key('Tab');await key('Tab');
- await evaluate(`document.querySelector('.fader').focus()`);await key('ArrowRight');await key('ArrowLeft');await sleep(300);
- await clip('a11y-focus-fader.png','[data-testid=sim]');
- await focusTestId('scenario-cover','[data-scenario=majority-loss]');await sleep(200);
- await clip('a11y-focus-cover.png','[data-testid=test-panel]');
- await focusTestId('feeder-breaker','[data-building=mar_mikhael]');await sleep(200);
- await clip('a11y-focus-breaker.png','[data-testid=feeders]');
+ // Dock tabs: arrows move focus, Enter opens.
+ await focusTestId('tab-log');await key('ArrowRight');
+ check('ArrowRight moves focus to the next dock tab without opening it',await focusIs('tab-tests')&&await evaluate(`document.querySelector(${q('tab-log')}).getAttribute('aria-selected')==='true'`));
+ await key('Enter');await sleep(250);
+ check('Enter opens the Failure tests tab',await evaluate(`document.querySelector(${q('tab-tests')}).getAttribute('aria-selected')==='true'&&!document.getElementById('panel-tests').hidden&&document.getElementById('panel-log').hidden`));
+ stops=await walk();
+ check('Failure tests: Tab reaches every scenario, the overload run and its policy choice',countOf(stops,'scenario-cover')===4&&countOf(stops,'overload-cover')===1&&stops.filter(s=>/^overload-policy-/.test(s.testid)).length===1,`${countOf(stops,'scenario-cover')} scenarios, ${countOf(stops,'overload-cover')} overload`);
+ await openTabByKey('tab-sim');
+ stops=await walk();
+ check('Simulation: Tab reaches the meter choice, the multiplier, Apply and both service switches',stops.some(s=>/^meters-/.test(s.testid))&&stops.some(s=>s.tag==='INPUT'&&/Demand multiplier/.test(s.label+''))||stops.some(s=>s.tag==='INPUT')&&countOf(stops,'sim-apply')===1&&countOf(stops,'breaker-database')===1&&countOf(stops,'breaker-broker')===1,`${stops.length} stops`);
+ check('Simulation: every tab stop shows a visible focus ring',stops.every(s=>s.ring));
+ await openTabByKey('tab-log');
  // Policy switch with arrow keys.
  check('policy switch is focusable',await focusTestId('policy-fair_share'));
  await key('ArrowRight');
- await waitFor(()=>evaluate(`document.querySelector('[data-testid="policy-first_come"]').getAttribute('aria-checked')==='true'`),15000);
+ await waitFor(()=>evaluate(`document.querySelector(${q('policy-first_come')}).getAttribute('aria-checked')==='true'`),15000);
  check('ArrowRight on the policy switch commits First come',true);
  await focusTestId('policy-first_come');await key('ArrowLeft');
- await waitFor(()=>evaluate(`document.querySelector('[data-testid="policy-fair_share"]').getAttribute('aria-checked')==='true'`),15000);
+ await waitFor(()=>evaluate(`document.querySelector(${q('policy-fair_share')}).getAttribute('aria-checked')==='true'`),15000);
  check('ArrowLeft restores Fair sharing',true);
- // Gateway breaker with Space.
- await focusTestId('feeder-breaker','[data-building=hamra]');await key('Space');
- await waitFor(()=>evaluate(`document.querySelector('[data-building=hamra] [data-testid=feeder-breaker]').getAttribute('aria-checked')==='false'`),15000);
- check('Space on a feeder breaker stops that gateway',true);
- await waitFor(()=>evaluate(`!document.querySelector('[data-building=hamra] [data-testid=feeder-breaker]').disabled`),15000);
- await focusTestId('feeder-breaker','[data-building=hamra]');await key('Space');
- await waitFor(()=>evaluate(`document.querySelector('[data-building=hamra] [data-testid=feeder-breaker]').getAttribute('aria-checked')==='true'`),15000);
- check('Space again starts it',true);
- // Meters rotary + Apply.
+ // Gateway breaker: stopping asks first, starting does not.
+ const br='[data-building=hamra]';
+ await focusTestId('feeder-breaker',br);await key('Space');
+ a=await active();
+ check('Space on a closed breaker asks "Stop gateway?" and focus moves to Confirm',a.testid==='feeder-breaker-confirm'&&await evaluate(`!document.querySelector(${q('feeder-breaker-confirm',br)}).closest('[hidden]')`),JSON.stringify(a));
+ await key('Escape');await sleep(250);
+ check('Escape cancels the question, focus returns to the breaker and the gateway is still running',await focusIs('feeder-breaker')&&await evaluate(`document.querySelector(${q('feeder-breaker',br)}).getAttribute('aria-checked')==='true'`));
+ await key('Space');await key('Enter');
+ await waitFor(()=>evaluate(`document.querySelector(${q('feeder-breaker',br)}).getAttribute('aria-checked')==='false'`),15000);
+ check('Space then Enter (Confirm) stops that gateway',true);
+ await waitFor(()=>evaluate(`!document.querySelector(${q('feeder-breaker',br)}).disabled`),15000);
+ await focusTestId('feeder-breaker',br);await key('Space');
+ await waitFor(()=>evaluate(`document.querySelector(${q('feeder-breaker',br)}).getAttribute('aria-checked')==='true'`),15000);
+ check('Space on an open breaker starts the gateway at once',true);
+ // Coordinator row: the same two steps.
+ await focusTestId('relay-cover','[data-node=coordinator3]');await key('Enter');
+ a=await active();
+ check('Enter on a coordinator Stop asks for confirmation and focus moves to Confirm',a.testid==='relay-control',JSON.stringify(a));
+ await key('Escape');await sleep(250);
+ check('Escape cancels it and the coordinator keeps running',await focusIs('relay-cover')||await evaluate(`document.activeElement===document.querySelector('[data-node=coordinator3] [data-testid=relay-cover]')`));
+ // Simulation by keyboard.
+ await openTabByKey('tab-sim');
  await focusTestId('meters-10');await key('Space');await focusTestId('sim-apply');await key('Enter');
- await waitFor(()=>evaluate(`document.querySelector('[data-testid=active-meters]').textContent.trim()==='10'`),15000);
+ await waitFor(()=>evaluate(`document.querySelector(${q('active-meters')}).textContent.trim()==='10'`),15000);
  check('keyboard sets the simulator to 10 meters',true);
- await waitFor(()=>evaluate(`!document.querySelector('[data-testid=sim-apply]').disabled`),15000);
+ await waitFor(()=>evaluate(`!document.querySelector(${q('sim-apply')}).disabled`),15000);
  await focusTestId('meters-50');await key('Space');await focusTestId('sim-apply');await key('Enter');
- await waitFor(()=>evaluate(`document.querySelector('[data-testid=active-meters]').textContent.trim()==='50'`),15000);
+ await waitFor(()=>evaluate(`document.querySelector(${q('active-meters')}).textContent.trim()==='50'`),15000);
  check('keyboard restores 50 meters',true);
- // Help dialog: opens, traps focus, Escape closes and focus returns.
+ await openTabByKey('tab-log');
+ // About drawer: opens, traps focus, Escape closes and focus returns.
  await focusTestId('help-open');await key('Enter');
- await waitFor(()=>evaluate(`!!document.querySelector('[data-testid=help-dialog]')`),5000);
- await sleep(300);
- a=await active();check('help dialog takes focus when it opens',a.inDialog,JSON.stringify(a));
+ await waitFor(()=>evaluate(`!!document.querySelector(${q('help-dialog')})`),5000);await sleep(300);
+ a=await active();check('About this system takes focus when it opens',a.inDialog,JSON.stringify(a));
  let leaked=0;for(let i=0;i<14;i++){await key('Tab');if(!(await active()).inDialog)leaked++}
- check('Tab stays inside the open dialog (focus trap)',leaked===0,`${leaked} of 14 Tab presses left the dialog`);
+ check('Tab stays inside the open About drawer (focus trap)',leaked===0,`${leaked} of 14 Tab presses left the drawer`);
  await key('Escape');await sleep(500);
- check('Escape closes the dialog and focus returns to its button',await evaluate(`!document.querySelector('[data-testid=help-dialog]')&&document.activeElement===document.querySelector('[data-testid=help-open]')`));
- // The two new doors: opened with Enter, focus trapped, Escape closes, focus returns to the button.
- for(const [opener,door,name] of [['ledger-open','ledger-door','Full ledger'],['cluster-open','cluster-door','Cluster details']]){
+ check('Escape closes the drawer and focus returns to its button',await evaluate(`!document.querySelector(${q('help-dialog')})&&document.activeElement===document.querySelector(${q('help-open')})`));
+ // The other drawers.
+ for(const [opener,door,name] of [['ledger-open','ledger-door','Full log'],['cluster-open','cluster-door','Cluster details']]){
   await focusTestId(opener);await key('Enter');
-  await waitFor(()=>evaluate(`!!document.querySelector('[data-testid="${door}"]')`),5000);await sleep(300);
-  a=await active();check(`${name}: the door takes focus when it opens`,a.inDialog,JSON.stringify(a));
+  await waitFor(()=>evaluate(`!!document.querySelector(${q(door)})`),5000);await sleep(300);
+  a=await active();check(`${name}: the drawer takes focus when it opens`,a.inDialog,JSON.stringify(a));
   let out=0;for(let i=0;i<16;i++){await key('Tab');if(!(await active()).inDialog)out++}
-  check(`${name}: Tab stays inside the open door (focus trap)`,out===0,`${out} of 16 Tab presses left the door`);
+  check(`${name}: Tab stays inside the open drawer (focus trap)`,out===0,`${out} of 16 Tab presses left the drawer`);
   await key('Escape');await sleep(500);
-  check(`${name}: Escape closes the door and focus returns to its button`,await evaluate(`!document.querySelector('[data-testid="${door}"]')&&document.activeElement===document.querySelector('[data-testid="${opener}"]')`));
+  check(`${name}: Escape closes the drawer and focus returns to its button`,await evaluate(`!document.querySelector(${q(door)})&&document.activeElement===document.querySelector(${q(opener)})`));
  }
- // The bottom Chart recorder button toggles the same tray from the keyboard.
- await focusTestId('recorder-open-bottom');await key('Enter');
- await waitFor(()=>evaluate(`!!document.querySelector('[data-testid=recorder]')`),5000);await sleep(300);
- check('bottom Chart recorder button opens the tray and focus moves into it',await evaluate(`document.querySelector('[data-testid=recorder]').contains(document.activeElement)&&document.querySelector('[data-testid=recorder-open-bottom]').getAttribute('aria-expanded')==='true'&&document.querySelector('[data-testid=recorder-open]').getAttribute('aria-expanded')==='true'`));
+ await focusTestId('feeder-open','[data-building=achrafieh]');await key('Enter');
+ await waitFor(()=>evaluate(`!!document.querySelector(${q('feeder-door')})`),5000);await sleep(300);
  await key('Escape');await sleep(500);
- check('Escape closes the tray and focus returns to the bottom button',await evaluate(`!document.querySelector('[data-testid=recorder]')&&document.activeElement===document.querySelector('[data-testid=recorder-open-bottom]')`));
- // Guarded scenario button: cover, press, status.
+ check('Building details: Escape closes the drawer and focus returns to the building name',await evaluate(`!document.querySelector(${q('feeder-door')})&&document.activeElement===document.querySelector('[data-building=achrafieh] [data-testid=feeder-open]')`));
+ // The Chart tab opens the one chart from the keyboard.
+ await focusTestId('recorder-open-bottom');await key('Enter');
+ await waitFor(()=>evaluate(`!!document.querySelector(${q('recorder')})`),5000);await sleep(300);
+ check('the Chart tab opens the chart and focus moves into it',await evaluate(`document.querySelector(${q('recorder')}).contains(document.activeElement)&&document.querySelector(${q('recorder-open-bottom')}).getAttribute('aria-expanded')==='true'&&document.querySelector(${q('recorder-open')}).getAttribute('aria-expanded')==='true'`));
+ await key('Escape');await sleep(500);
+ check('Escape closes the chart and focus returns to the Chart tab',await evaluate(`!document.querySelector(${q('recorder')})&&document.activeElement===document.querySelector(${q('recorder-open-bottom')})`));
+ // Failure test: ask, back out, ask again, confirm, completes.
+ await openTabByKey('tab-tests');
  const sc='[data-scenario=leader-failover]';
- await focusTestId('scenario-cover',sc);await key('Enter');await sleep(500);
- a=await active();check('Enter lifts the cover and focus moves to the press button',a.testid==='scenario-run',JSON.stringify(a));
+ await focusTestId('scenario-cover',sc);await key('Enter');await sleep(400);
+ a=await active();check('Enter on Run asks for confirmation and focus moves to Confirm',a.testid==='scenario-run',JSON.stringify(a));
+ check('the question says what the test does',await evaluate(`/stops the current leader and restores it afterwards/.test(document.querySelector(${q('scenario-run',sc)}).closest('.twostep').textContent)`));
  await key('Escape');await sleep(300);
- a=await active();check('Escape closes the cover and focus returns to it',a.testid==='scenario-cover',JSON.stringify(a));
- await key('Enter');await sleep(500);await key('Enter');
- await waitFor(()=>evaluate(`/Running|Step 1/.test(document.querySelector('[data-testid=scenario-status]').textContent)`),15000);
+ a=await active();check('Escape cancels and focus returns to Run',a.testid==='scenario-cover',JSON.stringify(a));
+ await key('Enter');await sleep(400);await key('Enter');
+ await waitFor(()=>evaluate(`/Running|Step 1/.test(document.querySelector(${q('scenario-status')}).textContent)`),15000);
  check('keyboard starts the leader failover scenario',true);
- await waitFor(()=>evaluate(`document.querySelector('[data-testid=scenario-status]').textContent.includes('Completed')`),150000);
+ check('the Failure tests tab says a test is running',await evaluate(`/Running/.test(document.querySelector(${q('tab-tests')}).textContent)`));
+ await waitFor(()=>evaluate(`document.querySelector(${q('scenario-status')}).textContent.includes('Completed')`),150000);
  check('the scenario completes and restores every coordinator',await evaluate(`[...document.querySelectorAll('[data-testid=relay]')].every(r=>r.dataset.role!=='Unreachable')`));
  check('no uncaught JavaScript errors',report.errors.length===0,report.errors.join(' | ')||'none');
 }catch(error){report.error=error.message;console.log('ERROR',error.message);process.exitCode=1}
