@@ -54,8 +54,12 @@ type Event struct {
 	OccurredAt string `json:"occurred_at"`
 }
 
-// MaxWants bounds how many distinct buildings can have a recorded want at once (see the grant rule).
-const MaxWants = 64
+// MaxWants bounds how many distinct buildings can have a recorded want at once (see admitWant). Buildings that hold
+// a lease may exceed it up to MaxWantsHard, a ceiling that does not depend on the generator's capacity.
+const (
+	MaxWants     = 64
+	MaxWantsHard = 4 * MaxWants
+)
 
 // Want is a building's most recent processed request amount (clamped to Capacity) and the log index that recorded it.
 // Wants only steer fair-share caps; they never reserve anything.
@@ -358,7 +362,7 @@ func (l Lease) HasTier(version uint64) bool {
 }
 
 // admitWant reports whether building b may record a want, making room by eviction when the set is full. A known
-// building always refreshes, and a building that holds a lease is always admitted (leases are bounded by capacity).
+// building always refreshes, and a building that holds a lease is admitted up to MaxWantsHard.
 // Otherwise the oldest want of a building holding no lease is evicted (lowest log index, then lowest id; the choice
 // is deterministic), so a flood of invented ids can only displace other lease-less wants, never a building that is
 // being served. When every want belongs to a leaseholder the newcomer is refused.
@@ -367,7 +371,7 @@ func (f *FSM) admitWant(b string) bool {
 		return true
 	}
 	if _, holds := f.state.Leases[b]; holds {
-		return true
+		return len(f.state.Wants) < MaxWantsHard
 	}
 	victim, version, found := "", uint64(0), false
 	for id, w := range f.state.Wants {

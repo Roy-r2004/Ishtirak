@@ -143,3 +143,29 @@ func TestALeaseholderWhoseWantExpiredIsAlwaysAdmitted(t *testing.T) {
 		t.Fatalf("the set may exceed the bound only by the number of leaseholders, got %d", len(wantsOf(f)))
 	}
 }
+
+// Leaseholders may exceed the soft bound, but never the hard ceiling, whatever the generator's capacity is.
+func TestLeaseholderBypassHasAHardBound(t *testing.T) {
+	f := initializedFSM(100000)
+	var index uint64 = 1
+	const buildings = MaxWantsHard + 50
+	for i := 0; i < buildings; i++ { // first_come: every building is served, only the first MaxWants record a want
+		index++
+		res := apply(f, index, 1, grant(fmt.Sprintf("a-%d", i), fmt.Sprintf("b-%d", i), "s", 1))
+		if !res.Accepted {
+			t.Fatalf("first_come must serve building %d: %+v", i, res)
+		}
+	}
+	if got := len(wantsOf(f)); got != MaxWants {
+		t.Fatalf("only %d wants may be recorded while the buildings hold no lease, got %d", MaxWants, got)
+	}
+	for i := 0; i < buildings; i++ { // renewals: now every building holds a lease and asks to record its want
+		index++
+		apply(f, index, 1, grant(fmt.Sprintf("r-%d", i), fmt.Sprintf("b-%d", i), "s", 1))
+	}
+	if got := len(wantsOf(f)); got != MaxWantsHard {
+		t.Fatalf("leaseholders must fill the set up to the hard ceiling %d and no further, got %d", MaxWantsHard, got)
+	}
+	checkWantInvariants(t, f, "hard bound")
+	checkInvariants(t, f, "hard bound")
+}
