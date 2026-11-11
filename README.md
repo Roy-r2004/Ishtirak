@@ -12,7 +12,7 @@ Install Docker Desktop with Linux containers, then run from this directory:
 docker compose up --build -d
 ```
 
-Open **http://localhost:8088**. The dashboard displays real MQTT telemetry, live Raft state, allocation events, and a simulation lab. Startup usually takes a few seconds after images finish building. The initial simulation has 50 household meters across three buildings, sharing a 120 A generator.
+Open **http://localhost:8088**. The dashboard is a single electrical-switchboard screen: a needle ammeter for the 120 A generator with a peak needle, one relay card per coordinator, one breaker and meter per building, a ledger tape of allocation events, and a test panel with guarded failure scenarios, the Overload test and the meter simulator. Add `?demo=1` to the address to see it on simulated data without any backend (a permanent "Simulated data" plate marks it). Startup usually takes a few seconds after images finish building. The initial simulation has 50 household meters across three buildings, sharing a 120 A generator.
 
 ```powershell
 docker compose ps

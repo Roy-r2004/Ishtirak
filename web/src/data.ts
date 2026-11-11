@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { policyOf, type Policy, type Share } from './lab/fairness'
-export type Lease = { building_id:string; amps:number; version:number }
+/** One committed grant a gateway may still use. `Lease.amps` is the largest (oldest) tier; tiers are listed oldest first with falling amps. Older coordinators omit them. */
+export type Tier = { version:number; amps:number }
+export type Lease = { building_id:string; amps:number; version:number; tiers?:Tier[] }
 export type Audit = { event_id:number; kind:string; building_id:string; amps:number; version:number; occurred_at:string }
 export type NodeData = { node_id:string; state:string; leader_id:string; quorum:boolean; capacity_amps:number; granted_amps:number; available_amps:number; leases:Lease[]; audit:Audit[]; postgres_connected:boolean; raft:Record<string,string>; quorum_verified_at:string; fair_share?:boolean; wants?:Share[]; fair_shares?:Share[] }
 export type Building = { building_id:string; name:string; meter_count:number; demand_amps:number; served_amps:number; granted_amps:number; lease_remaining_ms:number; lease_version:number; state:string; mqtt_connected:boolean; pending_readings:number; dropped_readings:number; readings_total:number; last_error:string }
