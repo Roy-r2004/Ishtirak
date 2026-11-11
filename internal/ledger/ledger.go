@@ -292,9 +292,9 @@ func (f *FSM) Apply(log *raft.Log) interface{} {
 		// switching the policy on has data). It only caps later grants; it reserves nothing.
 		// The number of distinct buildings with a want is bounded: building ids are not authenticated, so an unbounded set
 		// would let invented ids grow state and dilute every real building's share. A building already in the set can
-		// always refresh its want; a new one beyond the bound has none, so under fair_share its share is 0 and it is
-		// refused, and under first_come a want is not needed.
-		if _, known := f.state.Wants[r.BuildingID]; known || len(f.state.Wants) < MaxWants {
+		// always refresh its want; a newcomer beyond the bound displaces the oldest want of a building holding no lease
+		// (see admitWant); when none can be displaced it has no want, so under fair_share its share is 0 and it is refused.
+		if f.admitWant(r.BuildingID) {
 			f.state.Wants[r.BuildingID] = Want{BuildingID: r.BuildingID, Amps: min(r.Amps, f.state.Capacity), Version: log.Index}
 		}
 		// amps is what this grant authorizes: the request itself, or under fair_share at most the building's
@@ -355,6 +355,34 @@ func (l Lease) HasTier(version uint64) bool {
 		}
 	}
 	return false
+}
+
+// admitWant reports whether building b may record a want, making room by eviction when the set is full. A known
+// building always refreshes, and a building that holds a lease is always admitted (leases are bounded by capacity).
+// Otherwise the oldest want of a building holding no lease is evicted (lowest log index, then lowest id; the choice
+// is deterministic), so a flood of invented ids can only displace other lease-less wants, never a building that is
+// being served. When every want belongs to a leaseholder the newcomer is refused.
+func (f *FSM) admitWant(b string) bool {
+	if _, known := f.state.Wants[b]; known || len(f.state.Wants) < MaxWants {
+		return true
+	}
+	if _, holds := f.state.Leases[b]; holds {
+		return true
+	}
+	victim, version, found := "", uint64(0), false
+	for id, w := range f.state.Wants {
+		if _, holds := f.state.Leases[id]; holds {
+			continue
+		}
+		if !found || w.Version < version || (w.Version == version && id < victim) {
+			victim, version, found = id, w.Version, true
+		}
+	}
+	if !found {
+		return false
+	}
+	delete(f.state.Wants, victim)
+	return true
 }
 func (f *FSM) event(kind, request string, l Lease, at string) {
 	f.state.EventCounter++

@@ -62,3 +62,30 @@ mid-run snapshot restore give an identical state.
 leader change can then hand out capacity the others have reserved. Never run old and new coordinators together once a
 `set_policy` has been committed (an upgraded leader commits one on its first tick). Upgrade all three at once, and wipe the Raft
 volumes to downgrade after `fair_share` has been committed.
+
+## Hardening after the adversarial review
+
+An independent review (a 60-seed simulation with the real ledger and deadlines, two max-min oracles, a model written from the
+spec, and 42 mutants) found no capacity-safety, determinism or fairness-arithmetic defect. It led to four changes:
+
+- **Mixed-version guard.** An old replica ignores `set_policy`, so enabling `fair_share` while one runs would let the cluster
+  diverge. A background check (`watchPeers`, outside the operation lock so a dead peer never delays grants) records whether
+  every other coordinator is reachable and reports the `fair_share` status key. While it does not, `ensurePolicy` leaves the
+  policy unset (which behaves as `first_come`, the safe default) and `POST /api/policy` refuses `fair_share` with 409.
+  Switching to `first_come` is always allowed. Upgrade all three coordinators together regardless.
+- **Bounded want set.** Building ids are not authenticated, so the set of wants is bounded (`MaxWants = 64`). A known building
+  always refreshes its want; a building that holds a lease is always admitted (leases are bounded by capacity); a newcomer
+  evicts the oldest want of a building that holds no lease (lowest log index, then lowest id, so every replica chooses the
+  same one) and is refused only if every want belongs to a leaseholder. A flood of invented ids can therefore displace other
+  lease-less wants but never a building that is being served.
+- **Admin token.** `POST /api/policy` on a coordinator requires the header `X-Ishtirak-Admin` when `ADMIN_TOKEN` is set; the
+  control service adds it. The compose file sets a public demo token (like the demo database password); it is defense in depth,
+  not authentication.
+- **Permanent tests** from the review: independent max-min oracles, a spec-model conformance test under both policies, a
+  safety simulation (toggled policies, restarts, late duplicates, stale terms), a test that the real `expirations` loop expires
+  wants and tiers, and a concurrency test of the policy handler under the race detector.
+
+Known limits that remain, by design of this prototype: building ids and gateway requests are not authenticated, so a client
+that can reach a coordinator can still invent buildings at a high rate; Raft state (`Results`, `Events`) is retained, so a
+demand overload sustained for many hours grows the snapshot; when more buildings want power than there are amps, the
+lexicographically last ones can be starved of a share until the others stop asking.
