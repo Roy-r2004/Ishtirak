@@ -12,14 +12,15 @@ import (
 // fakeCluster is three fake coordinators: GET /api/status reports the given raft state, POST /api/policy is
 // recorded and answered by reply.
 type fakeCluster struct {
-	mu    sync.Mutex
-	posts map[string][]string // coordinator id -> bodies received on /api/policy
-	types map[string][]string // coordinator id -> Content-Type of those requests
+	mu     sync.Mutex
+	posts  map[string][]string // coordinator id -> bodies received on /api/policy
+	types  map[string][]string // coordinator id -> Content-Type of those requests
+	tokens map[string][]string // coordinator id -> X-Ishtirak-Admin header of those requests
 }
 
 func newFakeCluster(t *testing.T, states map[string]string, reply func(id string, w http.ResponseWriter)) *fakeCluster {
 	t.Helper()
-	fc := &fakeCluster{posts: map[string][]string{}, types: map[string][]string{}}
+	fc := &fakeCluster{posts: map[string][]string{}, types: map[string][]string{}, tokens: map[string][]string{}}
 	urls := map[string]string{}
 	for _, id := range []string{"coordinator1", "coordinator2", "coordinator3"} {
 		id := id
@@ -33,6 +34,7 @@ func newFakeCluster(t *testing.T, states map[string]string, reply func(id string
 				fc.mu.Lock()
 				fc.posts[id] = append(fc.posts[id], string(b))
 				fc.types[id] = append(fc.types[id], r.Header.Get("Content-Type"))
+				fc.tokens[id] = append(fc.tokens[id], r.Header.Get("X-Ishtirak-Admin"))
 				fc.mu.Unlock()
 				reply(id, w)
 			default:
@@ -176,5 +178,34 @@ func TestPolicyRelaysTheLeadersAnswerAndNeverFollowsRedirects(t *testing.T) {
 				t.Fatalf("%d %s %v", w.Code, w.Body, fc.posts)
 			}
 		})
+	}
+}
+
+func TestPolicyForwardsTheAdminTokenToTheLeader(t *testing.T) {
+	t.Setenv("ENABLE_DEMO", "true")
+	t.Setenv("ADMIN_TOKEN", "demo-token")
+	fc := newFakeCluster(t, map[string]string{"coordinator1": "Follower", "coordinator2": "Leader", "coordinator3": "Follower"}, ok("fair_share"))
+	rec := policyRequest("POST", "", "application/json", `{"policy":"fair_share"}`)
+	if rec.Code != 200 {
+		t.Fatalf("expected 200, got %d %s", rec.Code, rec.Body)
+	}
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	if got := fc.tokens["coordinator2"]; len(got) != 1 || got[0] != "demo-token" {
+		t.Fatalf("the leader must receive the admin token, got %v", fc.tokens)
+	}
+}
+
+func TestPolicyWithoutAnAdminTokenSendsNoHeader(t *testing.T) {
+	t.Setenv("ENABLE_DEMO", "true")
+	t.Setenv("ADMIN_TOKEN", "")
+	fc := newFakeCluster(t, map[string]string{"coordinator1": "Leader", "coordinator2": "Follower", "coordinator3": "Follower"}, ok("first_come"))
+	if rec := policyRequest("POST", "", "application/json", `{"policy":"first_come"}`); rec.Code != 200 {
+		t.Fatalf("expected 200, got %d %s", rec.Code, rec.Body)
+	}
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	if got := fc.tokens["coordinator1"]; len(got) != 1 || got[0] != "" {
+		t.Fatalf("no header expected without a configured token, got %v", fc.tokens)
 	}
 }

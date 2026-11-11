@@ -54,6 +54,9 @@ type Event struct {
 	OccurredAt string `json:"occurred_at"`
 }
 
+// MaxWants bounds how many distinct buildings can have a recorded want at once (see the grant rule).
+const MaxWants = 64
+
 // Want is a building's most recent processed request amount (clamped to Capacity) and the log index that recorded it.
 // Wants only steer fair-share caps; they never reserve anything.
 type Want struct {
@@ -287,7 +290,13 @@ func (f *FSM) Apply(log *raft.Log) interface{} {
 	default:
 		// Every processed request, accepted or not, records the building's want under both policies (so that
 		// switching the policy on has data). It only caps later grants; it reserves nothing.
-		f.state.Wants[r.BuildingID] = Want{BuildingID: r.BuildingID, Amps: min(r.Amps, f.state.Capacity), Version: log.Index}
+		// The number of distinct buildings with a want is bounded: building ids are not authenticated, so an unbounded set
+		// would let invented ids grow state and dilute every real building's share. A building already in the set can
+		// always refresh its want; a new one beyond the bound has none, so under fair_share its share is 0 and it is
+		// refused, and under first_come a want is not needed.
+		if _, known := f.state.Wants[r.BuildingID]; known || len(f.state.Wants) < MaxWants {
+			f.state.Wants[r.BuildingID] = Want{BuildingID: r.BuildingID, Amps: min(r.Amps, f.state.Capacity), Version: log.Index}
+		}
 		// amps is what this grant authorizes: the request itself, or under fair_share at most the building's
 		// max-min share, and then only as much growth as the free capacity holds.
 		amps := r.Amps

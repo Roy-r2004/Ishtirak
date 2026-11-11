@@ -2,6 +2,7 @@ package coordinator
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,6 +34,10 @@ type Config struct {
 	// FairShare is only the policy this node proposes while the ledger has none; once a set_policy is
 	// committed the ledger's policy wins on every node.
 	FairShare bool
+	// AdminToken, when set, must accompany POST /api/policy (header X-Ishtirak-Admin). Only the control service
+	// holds it; the coordinators' own port is not published, but this keeps a stray caller on the network from
+	// changing the admission policy. Empty disables the check (development and tests).
+	AdminToken string
 }
 
 // LeaseDuration is a protocol constant shared by every coordinator. Allowing a
@@ -60,6 +65,7 @@ func EnvConfig() (Config, error) {
 		return c, errors.New(leaseConfigError)
 	}
 	c.Lease = LeaseDuration
+	c.AdminToken = os.Getenv("ADMIN_TOKEN")
 	if c.FairShare, err = strconv.ParseBool(env("FAIR_SHARE", "true")); err != nil {
 		return c, errors.New("invalid FAIR_SHARE: use true or false")
 	}
@@ -99,6 +105,10 @@ type Server struct {
 	op        sync.Mutex
 	deadlines *Deadlines
 	verified  atomic.Value
+	// peersBlocked is true while some other coordinator is unreachable or does not yet report the fair_share status
+	// key. An older replica ignores set_policy and would diverge from the others, so fair_share is never enabled
+	// while this is true. It is refreshed by watchPeers; a constructed server starts blocked until the first check.
+	peersBlocked atomic.Bool
 }
 
 func New(ctx context.Context, c Config) (*Server, error) {
@@ -176,6 +186,7 @@ func New(ctx context.Context, c Config) (*Server, error) {
 		return nil, err
 	}
 	s := &Server{cfg: c, raft: r, fsm: fsm, store: store, transport: transport, bolt: bolt, deadlines: NewDeadlines(c.Lease)}
+	s.peersBlocked.Store(len(c.HTTPPeers) > 1)
 	s.verified.Store(proof{})
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/grants", s.grant)
@@ -193,7 +204,53 @@ func (s *Server) Run(ctx context.Context) error {
 	go s.store.Run(ctx, s.fsm, func() bool { return s.raft.State() == raft.Leader })
 	go s.expirations(ctx)
 	go s.quorum(ctx)
+	go s.watchPeers(ctx)
 	return s.http.ListenAndServe()
+}
+
+// watchPeers keeps peersBlocked current. It runs outside s.op so a slow or dead peer never delays grants or expiries.
+func (s *Server) watchPeers(ctx context.Context) {
+	for {
+		s.peersBlocked.Store(s.peerMissingFairShare(ctx) != "")
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(2 * time.Second):
+		}
+	}
+}
+
+// peerMissingFairShare returns the id of the first other coordinator that is unreachable, answers with anything but a
+// plain 200 (redirects are not followed), or does not report the fair_share status key; "" when every peer does.
+func (s *Server) peerMissingFairShare(ctx context.Context) string {
+	client := &http.Client{Timeout: 1500 * time.Millisecond, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	ids := make([]string, 0, len(s.cfg.HTTPPeers))
+	for id := range s.cfg.HTTPPeers {
+		if id != s.cfg.NodeID {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.cfg.HTTPPeers[id]+"/api/status", nil)
+		if err != nil {
+			return id
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			return id
+		}
+		var status map[string]json.RawMessage
+		err = json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(&status)
+		resp.Body.Close()
+		if err != nil || resp.StatusCode != http.StatusOK {
+			return id
+		}
+		if _, ok := status["fair_share"]; !ok {
+			return id
+		}
+	}
+	return ""
 }
 func (s *Server) Close(ctx context.Context) error {
 	_ = s.http.Shutdown(ctx)
@@ -249,6 +306,10 @@ func (s *Server) ensurePolicy() error {
 	}
 	policy := "first_come"
 	if s.cfg.FairShare {
+		if s.peersBlocked.Load() {
+			// Stay on the safe zero-value policy (first_come) and retry later: an older replica would ignore the entry.
+			return nil
+		}
 		policy = "fair_share"
 	}
 	result, err := s.apply(ledger.Command{Kind: "set_policy", Policy: policy, OccurredAt: time.Now().UTC().Format(time.RFC3339Nano)})
@@ -426,6 +487,10 @@ func (s *Server) grant(w http.ResponseWriter, r *http.Request) {
 
 // policy commits an admission-policy change as a set_policy log entry, so every replica switches at the same index.
 func (s *Server) policy(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.AdminToken != "" && subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Ishtirak-Admin")), []byte(s.cfg.AdminToken)) != 1 {
+		writeJSON(w, 403, map[string]string{"error": "admin token required"})
+		return
+	}
 	var body struct {
 		Policy string `json:"policy"`
 	}
@@ -435,6 +500,10 @@ func (s *Server) policy(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Policy != "fair_share" && body.Policy != "first_come" {
 		writeJSON(w, 400, map[string]string{"error": "policy must be fair_share or first_come"})
+		return
+	}
+	if body.Policy == "fair_share" && s.peersBlocked.Load() {
+		writeJSON(w, 409, map[string]string{"error": "every coordinator must be reachable and support fair sharing before it can be enabled"})
 		return
 	}
 	s.op.Lock()

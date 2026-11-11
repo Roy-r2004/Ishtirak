@@ -227,6 +227,9 @@ func policy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	forward.Header.Set("Content-Type", "application/json")
+	if token := os.Getenv("ADMIN_TOKEN"); token != "" {
+		forward.Header.Set("X-Ishtirak-Admin", token) // the coordinators only accept policy changes that carry it
+	}
 	res, err := policyClient.Do(forward)
 	if err != nil {
 		respond(w, 503, map[string]string{"error": "Coordinator unavailable"})

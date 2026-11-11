@@ -13,6 +13,7 @@ x-coordinator: &coordinator
     CAPACITY_AMPS: "120"
     LEASE_MS: "12000"
     FAIR_SHARE: "true"
+    ADMIN_TOKEN: "ishtirak-demo-admin-token"
     DATABASE_URL: "postgres://ishtirak:ishtirak_demo@postgres:5432/ishtirak?sslmode=disable"
   depends_on: {postgres: {condition: service_healthy}}
 
@@ -77,7 +78,7 @@ services:
     container_name: ishtirak-control
     user: "0:0"
     restart: unless-stopped
-    environment: {ENABLE_DEMO: "true"}
+    environment: {ENABLE_DEMO: "true", ADMIN_TOKEN: "ishtirak-demo-admin-token"}
     volumes: ["/var/run/docker.sock:/var/run/docker.sock"]
   dashboard:
     build: ./web
