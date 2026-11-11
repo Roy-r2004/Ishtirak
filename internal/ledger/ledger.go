@@ -53,6 +53,14 @@ type Event struct {
 	Version    uint64 `json:"version"`
 	OccurredAt string `json:"occurred_at"`
 }
+
+// Want is a building's most recent processed request amount (clamped to Capacity) and the log index that recorded it.
+// Wants only steer fair-share caps; they never reserve anything.
+type Want struct {
+	BuildingID string `json:"building_id"`
+	Amps       int    `json:"amps"`
+	Version    uint64 `json:"version"`
+}
 type Command struct {
 	Kind            string  `json:"kind"`
 	Capacity        int     `json:"capacity_amps,omitempty"`
@@ -60,6 +68,7 @@ type Command struct {
 	BuildingID      string  `json:"building_id,omitempty"`
 	ExpectedVersion uint64  `json:"expected_version,omitempty"`
 	ExpectedTerm    uint64  `json:"expected_term,omitempty"`
+	Policy          string  `json:"policy,omitempty"`
 	OccurredAt      string  `json:"occurred_at"`
 }
 type RecordedResult struct {
@@ -74,6 +83,11 @@ type State struct {
 	Results              map[string]RecordedResult `json:"results"`
 	Events               []Event                   `json:"events"`
 	EventCounter         uint64                    `json:"event_counter"`
+	// FairShare selects the admission policy and PolicyConfigured records that a committed set_policy chose it.
+	// Both change only through the log, so every replica and every replay switches at the same entry.
+	FairShare        bool            `json:"fair_share"`
+	PolicyConfigured bool            `json:"policy_configured"`
+	Wants            map[string]Want `json:"wants"`
 }
 type FSM struct {
 	mu    sync.RWMutex
@@ -83,7 +97,7 @@ type FSM struct {
 // New has no node-local capacity input. The first committed init_capacity
 // command establishes the capacity for every replica and all future replays.
 func New() *FSM {
-	return &FSM{state: State{Leases: map[string]Lease{}, Results: map[string]RecordedResult{}, Events: []Event{}}}
+	return &FSM{state: State{Leases: map[string]Lease{}, Results: map[string]RecordedResult{}, Events: []Event{}, Wants: map[string]Want{}}}
 }
 func (f *FSM) View() State {
 	f.mu.RLock()
@@ -92,10 +106,13 @@ func (f *FSM) View() State {
 	if start < 0 {
 		start = 0
 	}
-	s := State{Initialized: f.state.Initialized, UninitializedHistory: f.state.UninitializedHistory, Capacity: f.state.Capacity, EventCounter: f.state.EventCounter, Leases: make(map[string]Lease, len(f.state.Leases)), Events: append([]Event{}, f.state.Events[start:]...)}
+	s := State{Initialized: f.state.Initialized, UninitializedHistory: f.state.UninitializedHistory, Capacity: f.state.Capacity, EventCounter: f.state.EventCounter, FairShare: f.state.FairShare, PolicyConfigured: f.state.PolicyConfigured, Leases: make(map[string]Lease, len(f.state.Leases)), Wants: make(map[string]Want, len(f.state.Wants)), Events: append([]Event{}, f.state.Events[start:]...)}
 	for key, l := range f.state.Leases {
 		l.Tiers = append([]Tier(nil), l.Tiers...)
 		s.Leases[key] = l
+	}
+	for key, w := range f.state.Wants {
+		s.Wants[key] = w
 	}
 	return s
 }
@@ -121,10 +138,57 @@ func Granted(s State) int {
 	}
 	return n
 }
+
+// FairShares is the integer max-min fair allocation of s.Capacity over s.Wants (each want clamped to Capacity).
+// Buildings are taken in ascending (want, building id) order; one whose want fits the equal share of what
+// remains gets its full want, and from the first one that does not, every remaining building gets that equal
+// share, the leftover amps going one each to the first of them in the same order. Pure and independent of map
+// iteration order, so every replica computes the same shares. Shares only cap grants; they reserve nothing.
+func FairShares(s State) map[string]int {
+	wants := make([]Want, 0, len(s.Wants))
+	for _, w := range s.Wants {
+		w.Amps = min(w.Amps, s.Capacity)
+		wants = append(wants, w)
+	}
+	sort.Slice(wants, func(i, j int) bool {
+		if wants[i].Amps != wants[j].Amps {
+			return wants[i].Amps < wants[j].Amps
+		}
+		return wants[i].BuildingID < wants[j].BuildingID
+	})
+	shares := make(map[string]int, len(wants))
+	rem := max(s.Capacity, 0)
+	for i, w := range wants {
+		n := len(wants) - i
+		if share := rem / n; w.Amps <= share {
+			shares[w.BuildingID] = w.Amps
+			rem -= w.Amps
+			continue
+		}
+		share, extra := rem/n, rem%n
+		for _, o := range wants[i:] {
+			shares[o.BuildingID] = share
+			if extra > 0 {
+				shares[o.BuildingID]++
+				extra--
+			}
+		}
+		break
+	}
+	return shares
+}
 func SortedLeases(s State) []Lease {
 	a := make([]Lease, 0, len(s.Leases))
 	for _, l := range s.Leases {
 		a = append(a, l)
+	}
+	sort.Slice(a, func(i, j int) bool { return a[i].BuildingID < a[j].BuildingID })
+	return a
+}
+func SortedWants(s State) []Want {
+	a := make([]Want, 0, len(s.Wants))
+	for _, w := range s.Wants {
+		a = append(a, w)
 	}
 	sort.Slice(a, func(i, j int) bool { return a[i].BuildingID < a[j].BuildingID })
 	return a
@@ -152,6 +216,23 @@ func (f *FSM) Apply(log *raft.Log) interface{} {
 		f.state.Capacity = c.Capacity
 		f.state.Initialized = true
 		return Result{Accepted: true, Reason: "capacity_initialized"}
+	}
+	if c.Kind == "set_policy" {
+		// The admission policy changes only here, at a committed log index, so every replica and every replay
+		// decides each grant under the same policy. It is never derived from node-local configuration.
+		if c.Policy != "fair_share" && c.Policy != "first_come" {
+			return Result{Reason: "invalid_policy"}
+		}
+		f.state.FairShare, f.state.PolicyConfigured = c.Policy == "fair_share", true
+		return Result{Accepted: true, Reason: "policy_set"}
+	}
+	if c.Kind == "expire_want" {
+		// Fenced exactly like expire: only the version the proposing leader's hold was set for, in its own term.
+		// Dropping a want only changes future caps; it never touches a reservation.
+		if w, ok := f.state.Wants[c.BuildingID]; ok && w.Version == c.ExpectedVersion && log.Term == c.ExpectedTerm {
+			delete(f.state.Wants, c.BuildingID)
+		}
+		return Result{Accepted: true, Reason: "want_expired"}
 	}
 	if (c.Kind == "grant" || c.Kind == "expire") && !f.state.Initialized {
 		// Old pre-initialization logs cannot be safely reinterpreted. Refuse to
@@ -196,34 +277,51 @@ func (f *FSM) Apply(log *raft.Log) interface{} {
 	}
 	result := Result{RequestID: r.RequestID}
 	current, exists := f.state.Leases[r.BuildingID]
+	fair := f.state.FairShare
 	switch {
-	case r.RequestID == "" || r.BuildingID == "" || r.SessionID == "" || len(r.RequestID) > 128 || len(r.BuildingID) > 128 || len(r.SessionID) > 128 || r.Amps <= 0 || r.Amps > f.state.Capacity:
+	// Under fair_share a request above the whole capacity is not malformed: it is clamped below.
+	case r.RequestID == "" || r.BuildingID == "" || r.SessionID == "" || len(r.RequestID) > 128 || len(r.BuildingID) > 128 || len(r.SessionID) > 128 || r.Amps <= 0 || (!fair && r.Amps > f.state.Capacity):
 		result.Reason = "invalid_request"
 	case exists && current.SessionID != r.SessionID:
 		result.Reason = "building_session_active"
 	default:
+		// Every processed request, accepted or not, records the building's want under both policies (so that
+		// switching the policy on has data). It only caps later grants; it reserves nothing.
+		f.state.Wants[r.BuildingID] = Want{BuildingID: r.BuildingID, Amps: min(r.Amps, f.state.Capacity), Version: log.Index}
+		// amps is what this grant authorizes: the request itself, or under fair_share at most the building's
+		// max-min share, and then only as much growth as the free capacity holds.
+		amps := r.Amps
+		if fair {
+			amps = min(f.state.Wants[r.BuildingID].Amps, FairShares(f.state)[r.BuildingID])
+			if amps > current.Amps {
+				amps = current.Amps + min(amps-current.Amps, f.state.Capacity-Granted(f.state))
+			}
+		}
 		// The reservation only grows here; it shrinks when an older tier expires. delta is the growth.
 		delta := 0
-		if r.Amps > current.Amps {
-			delta = r.Amps - current.Amps // current.Amps is 0 without a lease
+		if amps > current.Amps {
+			delta = amps - current.Amps // current.Amps is 0 without a lease
 		}
 		// Subtraction avoids integer overflow for arbitrary JSON integers.
-		if delta > f.state.Capacity-Granted(f.state) {
+		if amps <= 0 || delta > f.state.Capacity-Granted(f.state) {
 			result.Reason = "capacity_exhausted"
 		} else {
 			// A newer tier with at least the same amps expires no earlier, so it dominates older ones.
 			tiers := make([]Tier, 0, len(current.Tiers)+1)
 			for _, t := range current.TierList() {
-				if t.Amps > r.Amps {
+				if t.Amps > amps {
 					tiers = append(tiers, t)
 				}
 			}
-			tiers = append(tiers, Tier{Version: log.Index, Amps: r.Amps})
+			tiers = append(tiers, Tier{Version: log.Index, Amps: amps})
 			f.state.Leases[r.BuildingID] = Lease{BuildingID: r.BuildingID, SessionID: r.SessionID, Amps: tiers[0].Amps, Version: log.Index, Tiers: tiers}
 			// The gateway receives only this grant's own authorization, never the reserved maximum.
-			own := Lease{BuildingID: r.BuildingID, SessionID: r.SessionID, Amps: r.Amps, Version: log.Index}
+			own := Lease{BuildingID: r.BuildingID, SessionID: r.SessionID, Amps: amps, Version: log.Index}
 			result.Accepted = true
 			result.Reason = "granted"
+			if amps != r.Amps {
+				result.Reason = "granted_partial"
+			}
 			result.Lease = &own
 			f.event("granted", r.RequestID, own, c.OccurredAt)
 		}
@@ -291,6 +389,15 @@ func (f *FSM) Restore(r io.ReadCloser) error {
 			return err
 		}
 		s.Leases[key] = l
+	}
+	// Snapshots written before fair sharing have no wants and no policy (first_come, unconfigured).
+	if s.Wants == nil {
+		s.Wants = map[string]Want{}
+	}
+	for key, w := range s.Wants {
+		if w.BuildingID != key || w.Amps <= 0 || w.Amps > s.Capacity {
+			return errors.New("snapshot has malformed wants")
+		}
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()

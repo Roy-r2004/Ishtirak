@@ -51,7 +51,7 @@ func TestSimulatedReservationNeverBelowUsableGrant(t *testing.T) {
 		nid := 0
 		tick := 100 * time.Millisecond
 		observe := func(now time.Duration) {
-			d.Observe(strconv.Itoa(int(term)), true, f.View().Leases, base.Add(now))
+			d.Observe(strconv.Itoa(int(term)), true, f.View().Leases, f.View().Wants, base.Add(now))
 		}
 		observe(0)
 		nextTermChange := time.Duration(5+rng.Intn(40)) * time.Second

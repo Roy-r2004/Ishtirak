@@ -30,6 +30,9 @@ type Config struct {
 	Bootstrap                                                  bool
 	Capacity                                                   int
 	Lease                                                      time.Duration
+	// FairShare is only the policy this node proposes while the ledger has none; once a set_policy is
+	// committed the ledger's policy wins on every node.
+	FairShare bool
 }
 
 // LeaseDuration is a protocol constant shared by every coordinator. Allowing a
@@ -57,6 +60,9 @@ func EnvConfig() (Config, error) {
 		return c, errors.New(leaseConfigError)
 	}
 	c.Lease = LeaseDuration
+	if c.FairShare, err = strconv.ParseBool(env("FAIR_SHARE", "true")); err != nil {
+		return c, errors.New("invalid FAIR_SHARE: use true or false")
+	}
 	for _, p := range strings.Split(env("PEERS", "coordinator1=coordinator1:9000,coordinator2=coordinator2:9000,coordinator3=coordinator3:9000"), ",") {
 		a, b, ok := strings.Cut(p, "=")
 		if !ok || a == "" || b == "" {
@@ -173,6 +179,7 @@ func New(ctx context.Context, c Config) (*Server, error) {
 	s.verified.Store(proof{})
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/grants", s.grant)
+	mux.HandleFunc("POST /api/policy", s.policy)
 	mux.HandleFunc("POST /api/readings", s.readings)
 	mux.HandleFunc("GET /api/status", s.status)
 	mux.HandleFunc("GET /api/ws", s.websocket)
@@ -199,7 +206,8 @@ func (s *Server) Close(ctx context.Context) error {
 func (s *Server) syncDeadlines(now time.Time) (string, bool) {
 	term := s.raft.Stats()["term"]
 	active := s.raft.State() == raft.Leader
-	s.deadlines.Observe(term, active, s.fsm.View().Leases, now)
+	view := s.fsm.View()
+	s.deadlines.Observe(term, active, view.Leases, view.Wants, now)
 	return term, active
 }
 
@@ -215,6 +223,40 @@ func (s *Server) ensureCapacity() error {
 	}
 	if !s.fsm.View().Initialized {
 		return fmt.Errorf("capacity initialization refused: %s", result.Reason)
+	}
+	return nil
+}
+
+// fairShareView is one building's current max-min share as reported by Status.
+type fairShareView struct {
+	BuildingID string `json:"building_id"`
+	Amps       int    `json:"amps"`
+}
+
+// ensurePolicy proposes this node's configured policy through consensus, but only while the ledger has none.
+// Once a set_policy is committed (by any leader, or by POST /api/policy) it is never overridden from config.
+// A new leader may not yet have applied an entry the previous leader committed, so before proposing it waits
+// until everything committed so far is applied; otherwise a stale view could replace a policy chosen by an operator.
+func (s *Server) ensurePolicy() error {
+	if s.fsm.View().PolicyConfigured {
+		return nil
+	}
+	if err := s.raft.Barrier(2 * time.Second).Error(); err != nil {
+		return err
+	}
+	if s.fsm.View().PolicyConfigured {
+		return nil
+	}
+	policy := "first_come"
+	if s.cfg.FairShare {
+		policy = "fair_share"
+	}
+	result, err := s.apply(ledger.Command{Kind: "set_policy", Policy: policy, OccurredAt: time.Now().UTC().Format(time.RFC3339Nano)})
+	if err != nil {
+		return err
+	}
+	if !result.Accepted {
+		return fmt.Errorf("policy initialization refused: %s", result.Reason)
 	}
 	return nil
 }
@@ -237,6 +279,10 @@ func (s *Server) expirations(ctx context.Context) {
 					s.op.Unlock()
 					continue
 				}
+				if err := s.ensurePolicy(); err != nil {
+					s.op.Unlock()
+					continue
+				}
 				due := s.deadlines.Due(time.Now())
 				for id, version := range due {
 					freshTerm, leader := s.syncDeadlines(time.Now())
@@ -251,6 +297,22 @@ func (s *Server) expirations(ctx context.Context) {
 					n, _ := strconv.ParseUint(term, 10, 64)
 					_, err := s.apply(ledger.Command{Kind: "expire", BuildingID: id, ExpectedVersion: version, ExpectedTerm: n, OccurredAt: time.Now().UTC().Format(time.RFC3339Nano)})
 					if err != nil {
+						break
+					}
+					s.syncDeadlines(time.Now())
+				}
+				// A silent building's last want stops capping the others once its hold has passed. Like a
+				// lease expiry it is fenced by version and term and re-checked against the committed state.
+				for id, version := range s.deadlines.DueWants(time.Now()) {
+					freshTerm, leader := s.syncDeadlines(time.Now())
+					if !leader || freshTerm != term {
+						break
+					}
+					if w, ok := s.fsm.View().Wants[id]; !ok || w.Version != version {
+						continue
+					}
+					n, _ := strconv.ParseUint(term, 10, 64)
+					if _, err := s.apply(ledger.Command{Kind: "expire_want", BuildingID: id, ExpectedVersion: version, ExpectedTerm: n, OccurredAt: time.Now().UTC().Format(time.RFC3339Nano)}); err != nil {
 						break
 					}
 					s.syncDeadlines(time.Now())
@@ -346,6 +408,10 @@ func (s *Server) grant(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 503, map[string]string{"error": "capacity initialization unavailable; retry the same request_id"})
 		return
 	}
+	if err := s.ensurePolicy(); err != nil {
+		writeJSON(w, 503, map[string]string{"error": "policy initialization unavailable; retry the same request_id"})
+		return
+	}
 	result, err := s.apply(ledger.Command{Kind: "grant", Request: request, OccurredAt: time.Now().UTC().Format(time.RFC3339Nano)})
 	if err != nil {
 		writeJSON(w, 503, map[string]string{"error": "commit outcome unknown; retry the same request_id"})
@@ -356,6 +422,45 @@ func (s *Server) grant(w http.ResponseWriter, r *http.Request) {
 		ledger.Result
 		LeaseMS int64 `json:"lease_ms"`
 	}{result, s.cfg.Lease.Milliseconds()})
+}
+
+// policy commits an admission-policy change as a set_policy log entry, so every replica switches at the same index.
+func (s *Server) policy(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Policy string `json:"policy"`
+	}
+	if err := decode(w, r, &body); err != nil {
+		writeJSON(w, 400, map[string]string{"error": err.Error()})
+		return
+	}
+	if body.Policy != "fair_share" && body.Policy != "first_come" {
+		writeJSON(w, 400, map[string]string{"error": "policy must be fair_share or first_come"})
+		return
+	}
+	s.op.Lock()
+	defer s.op.Unlock()
+	if s.redirect(w, r) {
+		return
+	}
+	_, active := s.syncDeadlines(time.Now())
+	if !active {
+		writeJSON(w, 503, map[string]string{"error": "leadership changed"})
+		return
+	}
+	if err := s.ensureCapacity(); err != nil {
+		writeJSON(w, 503, map[string]string{"error": "capacity initialization unavailable"})
+		return
+	}
+	result, err := s.apply(ledger.Command{Kind: "set_policy", Policy: body.Policy, OccurredAt: time.Now().UTC().Format(time.RFC3339Nano)})
+	if err != nil {
+		writeJSON(w, 503, map[string]string{"error": "commit outcome unknown"})
+		return
+	}
+	if !result.Accepted {
+		writeJSON(w, 400, map[string]string{"error": result.Reason})
+		return
+	}
+	writeJSON(w, 200, map[string]string{"policy": body.Policy})
 }
 func (s *Server) readings(w http.ResponseWriter, r *http.Request) {
 	var body struct {
@@ -389,7 +494,12 @@ func (s *Server) Status() map[string]any {
 		audit = audit[len(audit)-100:]
 	}
 	granted := ledger.Granted(state)
-	return map[string]any{"node_id": s.cfg.NodeID, "state": s.raft.State().String(), "leader_id": string(id), "leader_url": s.cfg.HTTPPeers[string(id)], "quorum": verified, "quorum_verified_at": p.at.UTC().Format(time.RFC3339Nano), "capacity_amps": state.Capacity, "initialized": state.Initialized, "granted_amps": granted, "available_amps": state.Capacity - granted, "leases": ledger.SortedLeases(state), "audit": audit, "postgres_connected": s.store.Connected(), "latest_readings": s.store.Latest(), "raft": stats, "lease_ms": s.cfg.Lease.Milliseconds()}
+	wants, shares := ledger.SortedWants(state), ledger.FairShares(state)
+	fair := make([]fairShareView, 0, len(wants))
+	for _, w := range wants {
+		fair = append(fair, fairShareView{BuildingID: w.BuildingID, Amps: shares[w.BuildingID]})
+	}
+	return map[string]any{"fair_share": state.FairShare, "wants": wants, "fair_shares": fair, "node_id": s.cfg.NodeID, "state": s.raft.State().String(), "leader_id": string(id), "leader_url": s.cfg.HTTPPeers[string(id)], "quorum": verified, "quorum_verified_at": p.at.UTC().Format(time.RFC3339Nano), "capacity_amps": state.Capacity, "initialized": state.Initialized, "granted_amps": granted, "available_amps": state.Capacity - granted, "leases": ledger.SortedLeases(state), "audit": audit, "postgres_connected": s.store.Connected(), "latest_readings": s.store.Latest(), "raft": stats, "lease_ms": s.cfg.Lease.Milliseconds()}
 }
 func (s *Server) status(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, s.Status()) }
 

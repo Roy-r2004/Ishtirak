@@ -13,6 +13,13 @@ A sampler records granted totals from /api/overview. At the end every service is
 restarted, the cluster is awaited, coordinators must agree on one applied index,
 and the recorded history is checked. The report is artifacts/chaos-check.json.
 
+Admission policy: this checker only reads it. Under the fair_share policy a grant
+may be accepted partially (accepted:true, reason "granted_partial", lease amps
+below the request); that is a normal accepted grant, checked against the lease
+amps actually returned (a full grant must hold >= the request, a partial grant
+<= it). The policy each coordinator reports (its status `fair_share` flag) is
+recorded in the report under "policy" at the start, during sampling, and at the end.
+
 Limits: sampling is not proof (transients between polls are invisible), and
 unknown outcomes (HTTP 503, timeouts, transport errors) are not rejections.
 Uses only the standard library. Talks to the dashboard proxy and its
@@ -40,11 +47,14 @@ COORDINATORS = ("coordinator1", "coordinator2", "coordinator3")
 GATEWAYS = ("gateway-hamra", "gateway-mar-mikhael", "gateway-achrafieh")
 FAULTABLE = ("postgres", *COORDINATORS, *GATEWAYS)
 CAPACITY = 120
+PARTIAL_REASON = "granted_partial"   # fair_share: accepted with lease amps below the request
 MAJORITY_WINDOW_SECONDS = 16
 LIMITS = [
     "Sampling is not proof: the sampler polls /api/overview about once a second and cannot see transients between polls.",
     "Unknown outcomes are not rejections: HTTP 503, timeouts and transport errors may have committed and are counted separately.",
     "Synthetic chaos-* buildings share the 120 A capacity with the real gateways, so many rejections are expected capacity_exhausted decisions.",
+    "Under the fair_share policy some accepted grants are granted_partial (fewer amps than requested); they count as accepted and are checked against the lease amps returned.",
+    "The admission policy is read from coordinator status, not set, by this checker; a policy change by someone else during the run shows up in policy.observed_during_run.",
     "Convergence is a point-in-time comparison of applied indexes after healing; gateways keep renewing, so it is retried until the values agree.",
     "No gateway disk persistence, database failover or physical breaker is evaluated.",
 ]
@@ -77,19 +87,21 @@ def check_history(samples, grants, capacity):
                 violations.append(f"request {request_id}: accepted without a positive committed version ({version!r})")
             else:
                 ids_by_version.setdefault(version, set()).add(request_id)
-        by_request.setdefault(request_id, []).append((accepted, version if accepted else None, row.get("payload_hash")))
+        # A replay must return the same lease: version and the amps actually granted (partial or full).
+        by_request.setdefault(request_id, []).append(
+            (accepted, version if accepted else None, row.get("payload_hash"), row.get("lease_amps") if accepted else None))
 
     duplicate_versions = sorted(v for v, ids in ids_by_version.items() if len(ids) > 1)
     for version in duplicate_versions:
         violations.append(f"committed version {version} granted to {len(ids_by_version[version])} different requests")
     for request_id, rows in by_request.items():
         by_hash = {}
-        for accepted, version, payload_hash in rows:
-            by_hash.setdefault(payload_hash, set()).add((accepted, version))
+        for accepted, version, payload_hash, lease_amps in rows:
+            by_hash.setdefault(payload_hash, set()).add((accepted, version, lease_amps))
         for payload_hash, outcomes in by_hash.items():
             if len(outcomes) > 1:
                 violations.append(f"request {request_id}: replay returned different outcomes {sorted(map(str, outcomes))}")
-        if len({h for h, o in by_hash.items() if any(a for a, _ in o)}) > 1:
+        if len({h for h, o in by_hash.items() if any(a for a, _, _ in o)}) > 1:
             violations.append(f"request {request_id}: conflicting payload accepted under the same request_id")
     return {"violations": violations, "max_granted": max_granted, "duplicate_versions": duplicate_versions,
             "samples": len(samples), "grants": len(grants)}
@@ -113,9 +125,37 @@ def classify_response(status, data):
     return "unknown"
 
 
+def is_partial(data):
+    """fair_share answered accepted:true with reason granted_partial (lease amps below the request)."""
+    return isinstance(data, dict) and data.get("accepted") is True and data.get("reason") == PARTIAL_REASON
+
+
+def lease_budget_ok(requested, lease_amps, partial):
+    """Lease amps actually returned vs the request: a full grant holds >= it, a partial grant <= it."""
+    if isinstance(lease_amps, bool) or not isinstance(lease_amps, (int, float)):
+        return False
+    return 0 <= lease_amps <= requested if partial else lease_amps >= requested
+
+
+def policy_summary(nodes):
+    """Admission policy as reported by each online coordinator's status `fair_share` flag.
+    `consistent` needs every online node to report the same boolean; otherwise policy is None."""
+    per_node = {}
+    for node in nodes:
+        if node.get("online"):
+            flag = (node.get("data") or {}).get("fair_share")
+            per_node[node["id"]] = flag if isinstance(flag, bool) else None
+    known = set(per_node.values()) - {None}
+    consistent = bool(per_node) and None not in per_node.values() and len(known) == 1
+    fair_share = next(iter(known)) if consistent else None
+    return {"policy": None if fair_share is None else ("fair_share" if fair_share else "first_come"),
+            "fair_share": fair_share, "consistent": consistent, "per_node": per_node}
+
+
 def count_outcomes(rows):
     outcomes = Counter(row["outcome"] for row in rows)
     return {"requests": len(rows), "accepted": outcomes["accepted"], "rejected": outcomes["rejected"],
+            "accepted_partial": sum(1 for row in rows if row["outcome"] == "accepted" and row.get("partial")),
             "unknown_outcome": outcomes["unknown"], "redirect_not_processed": outcomes["redirect"],
             "invalid": outcomes["invalid"]}
 
@@ -201,6 +241,7 @@ class Chaos:
         self.leader_hint = None
         self.conflict = {"attempted": False, "observed": False, "outcome": None, "reason": None}
         self.convergence = {"converged": False}
+        self.policy_start = self.policy_end = None   # policy_summary() of the nodes before and after the run
         self.errors = []
         self.passed = False
         self.stop_sampler = threading.Event()
@@ -234,9 +275,11 @@ class Chaos:
             rows.append({"t": at, "node": node["id"], "granted": state["granted_amps"],
                          "capacity": state["capacity_amps"], "lease_sum": sum(lease["amps"] for lease in leases)})
         leader = self.leader_in(overview)
+        flag = leader["data"].get("fair_share") if leader else None
         status = {"t": at, "coordinators_up": sum(1 for n in overview["nodes"] if n.get("online")),
                   "gateways_up": sum(1 for b in overview.get("buildings", []) if b.get("online")),
-                  "leader": leader["id"] if leader else None}
+                  "leader": leader["id"] if leader else None,
+                  "fair_share": flag if isinstance(flag, bool) else None}
         with self.lock:
             self.samples.extend(rows)
             self.status_samples.append(status)
@@ -289,9 +332,12 @@ class Chaos:
         outcome = classify_response(status, data)
         accepted = (outcome == "accepted") if status == 200 and outcome in ("accepted", "rejected") else None
         lease = data.get("lease") if isinstance(data.get("lease"), dict) else {}
+        partial = accepted is True and is_partial(data)
+        # "amps" is what was requested; "lease_amps" is what the coordinator actually granted.
         row = {"t": self.now(), "kind": kind, "node": node, "request_id": payload["request_id"],
                "building_id": payload["building_id"], "amps": payload["amps"], "status": status,
                "outcome": outcome, "accepted": accepted, "version": lease.get("version") if accepted else None,
+               "lease_amps": lease.get("amps") if accepted else None, "partial": partial,
                "reason": data.get("reason") if outcome == "rejected" else None,
                "payload_hash": payload_hash(payload), "latency_ms": response["latency_ms"]}
         with self.lock:
@@ -299,7 +345,7 @@ class Chaos:
             if accepted is True:
                 if (data.get("request_id") != payload["request_id"] or lease.get("session_id") != payload["session_id"]
                         or lease.get("building_id") != payload["building_id"]
-                        or lease.get("amps", 0) < payload["amps"]):
+                        or not lease_budget_ok(payload["amps"], lease.get("amps"), partial)):
                     self.runner_violations.append(f"accepted response identity/budget mismatch for {payload['request_id']}")
                 if kind in ("new", "renew"):
                     self.accepted_payloads.append(payload)
@@ -394,6 +440,7 @@ class Chaos:
                 raise RuntimeError("owned demo controls are disabled; /api/actions would refuse")
             if len(overview["nodes"]) != 3 or not self.leader_in(overview):
                 raise RuntimeError("cluster is not healthy (3 coordinators and a leader required) before the run")
+            self.policy_start = policy_summary(overview["nodes"])
             self.t0 = time.monotonic()
             for thread in threads:
                 thread.start()
@@ -414,6 +461,10 @@ class Chaos:
                     self.convergence = self.converge()
             except BaseException as error:  # restoration must not be skipped by a second interrupt
                 self.errors.append(f"healing aborted: {error!r}")
+            try:
+                self.policy_end = policy_summary(self.overview()["nodes"])
+            except Exception:
+                pass  # the report then records the policy at the end as unavailable
             self.stop_sampler.set()
             if threads[0].is_alive():
                 threads[0].join(timeout=7)
@@ -437,6 +488,8 @@ class Chaos:
             if not self.samples:
                 failures.append("no node state was sampled")
             self.passed = not failures
+            observed = sorted({"fair_share" if s["fair_share"] else "first_come"
+                               for s in self.status_samples if isinstance(s.get("fair_share"), bool)})
             report = {"seed": self.seed, "duration_seconds": self.duration, "workers": self.workers,
                       "run_id": self.run_id, "started_at": started_at,
                       "finished_at": datetime.now(timezone.utc).isoformat(), "base_url": self.base,
@@ -444,6 +497,8 @@ class Chaos:
                       "interrupted": interrupted, "schedule": self.schedule, "actions_executed": self.actions,
                       "counts": {**counts, "rejection_reasons": dict(reasons)},
                       "conflict_replay": self.conflict, "history": history,
+                      "policy": {"at_start": self.policy_start, "at_end": self.policy_end,
+                                 "observed_during_run": observed},
                       "sampling": {"node_samples": len(self.samples), "sample_errors": self.sample_errors,
                                    "coordinator_status": self.status_samples},
                       "restoration": self.restoration, "convergence": self.convergence, "limits": LIMITS}

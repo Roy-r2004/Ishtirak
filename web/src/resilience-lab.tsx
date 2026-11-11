@@ -1,23 +1,30 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Activity, Building2, Check, Clock, Cpu, Database, LoaderCircle, Network, Play, ShieldCheck, Square, TriangleAlert, X } from 'lucide-react'
 import {time, num, type Grid} from './data'
-import {advance, begin, cancelRun, deriveTimeline, proof, scenarios, type Command, type Observation, type RunState, type Scenario, type TimelineEvent} from './lab/scenarios'
+import {advance, begin, cancelRun, catalogue, commandKey, commandRequest, deriveTimeline, dwellProgress, hasPending, isService, isStress, overload, proof, restoreCommands, scenarios, type Command, type Observation, type RunState, type Scenario, type TimelineEvent} from './lab/scenarios'
+import type {Policy} from './lab/fairness'
+import {FairSharing, type OverloadResults} from './fair-sharing'
 import './resilience-lab.css'
 const icons:Record<string,typeof Network>={'leader-failover':Network,'majority-loss':Cpu,'gateway-crash':Building2,'database-outage':Database}
 const kindLabel:Record<TimelineEvent['kind'],string>={leader_elected:'Leader observed',leader_lost:'Leader lost',node_down:'Unreachable',node_up:'Reachable',quorum_lost:'Majority lost',quorum_restored:'Majority restored'}
 const RETRY_MS=5000
 function observe(grid:Grid):Observation{
  const c=grid.cluster
- return{at:Date.now(),leader:grid.data?.nodes.find(n=>n.online&&n.data?.state==='Leader')?.id??null,nodesUp:grid.nodes.filter(n=>n.online).map(n=>n.id),buildingsUp:grid.buildings.filter(b=>b.online).map(b=>b.id),granted:c?.granted_amps??0,capacity:c?.capacity_amps??0,quorum:grid.quorum,stale:grid.stale||!c||!grid.data,postgresUp:c?c.postgres_connected:undefined}
+ return{at:Date.now(),leader:grid.data?.nodes.find(n=>n.online&&n.data?.state==='Leader')?.id??null,nodesUp:grid.nodes.filter(n=>n.online).map(n=>n.id),buildingsUp:grid.buildings.filter(b=>b.online).map(b=>b.id),granted:c?.granted_amps??0,capacity:c?.capacity_amps??0,quorum:grid.quorum,stale:grid.stale||!c||!grid.data,postgresUp:c?c.postgres_connected:undefined,policy:grid.policy,meters:grid.data?.meters.online&&grid.data.meters.data?{meter_count:grid.data.meters.data.meter_count,demand_factor:grid.data.meters.data.demand_factor}:null,wants:c?.wants,reserved:c?.leases}
 }
-const active=(r:RunState|null)=>!!r&&(r.status==='running'||r.status==='restoring'||r.stopped.length>0)
+const active=(r:RunState|null)=>!!r&&(r.status==='running'||r.status==='restoring'||hasPending(r))
 const outcome:Record<RunState['status'],string>={running:'Running',restoring:'Restoring services',done:'Completed',timeout:'Timed out',cancelled:'Cancelled'}
 const seconds=(ms:number)=>`${Math.max(0,Math.round(ms/1000))} s`
 export function ResilienceLab({grid}:{grid:Grid}){
- const [history,setHistory]=useState<Observation[]>([]),[timeline,setTimeline]=useState<TimelineEvent[]>([]),[run,setRunState]=useState<RunState|null>(null)
+ const [history,setHistory]=useState<Observation[]>([]),[timeline,setTimeline]=useState<TimelineEvent[]>([]),[run,setRunState]=useState<RunState|null>(null),[runPolicy,setRunPolicy]=useState<Policy>('fair_share'),[results,setResults]=useState<OverloadResults>({})
  const runRef=useRef<RunState|null>(null),obsRef=useRef<Observation|null>(null),baseline=useRef<Observation|null>(null),queue=useRef<Command[]>([]),sentAt=useRef<Record<string,number>>({})
  const setRun=(next:RunState|null)=>{runRef.current=next;setRunState(next)}
- const enqueue=(commands:Command[])=>{for(const c of commands)if(!queue.current.some(q=>q.service===c.service&&q.action===c.action))queue.current.push(c)}
+ const enqueue=(commands:Command[])=>{for(const c of commands)if(!queue.current.some(q=>commandKey(q)===commandKey(c)))queue.current.push(c)}
+ function send(cmd:Command){
+  if(isService(cmd))return grid.act(cmd.service,cmd.action)
+  if(cmd.kind==='policy')return void grid.setPolicy(cmd.policy)
+  const {path,body}=commandRequest(cmd);void grid.post(path,body,'meters-config',`Meters set to ${cmd.meter_count} at ${cmd.demand_factor.toFixed(1)}× demand.`)
+ }
  const enabled=!!grid.data?.demo_enabled,running=active(run)
  // Record one observation whenever new grid data arrives or freshness changes.
  useEffect(()=>{
@@ -39,32 +46,35 @@ export function ResilienceLab({grid}:{grid:Grid}){
  useEffect(()=>{
   if(!queue.current.length||grid.busy||!enabled)return
   const cmd=queue.current.shift()!
-  if(cmd.action==='stop'&&runRef.current?.status!=='running')return
-  const key=`${cmd.action}-${cmd.service}`,t=Date.now()
+  if(isStress(cmd,runRef.current)&&runRef.current?.status!=='running')return
+  const key=commandKey(cmd),t=Date.now()
   if(t-(sentAt.current[key]??0)<RETRY_MS)return
-  sentAt.current[key]=t;grid.act(cmd.service,cmd.action)
+  sentAt.current[key]=t;send(cmd)
  },[grid.now,grid.busy,enabled])
  // Always restore on unmount or page close, bypassing the shared action lock.
  useEffect(()=>{
-  const restoreNow=()=>{for(const service of runRef.current?.stopped??[])void fetch('/api/actions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service,action:'start'}),keepalive:true}).catch(()=>{})}
+  const restoreNow=()=>{const r=runRef.current;if(!r)return;for(const c of restoreCommands(r)){const {path,body}=commandRequest(c);void fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),keepalive:true}).catch(()=>{})}}
   window.addEventListener('pagehide',restoreNow)
   return()=>{window.removeEventListener('pagehide',restoreNow);restoreNow()}
  },[])
+ // Keep the last completed overload window per observed policy so both outcomes can be compared.
+ useEffect(()=>{const cap=run?.id==='overload'?run.captured:undefined;if(cap?.final&&cap.policy){const p=cap.policy;setResults(prev=>prev[p]?.at===cap.at?prev:{...prev,[p]:cap})}},[run])
  const stats=useMemo(()=>proof(history),[history])
  const fresh=!grid.stale&&!!grid.cluster&&!!grid.data
- function start(s:Scenario){
+ function start(s:Scenario,params?:{policy:Policy}){
   const current=obsRef.current
   if(!current||current.stale||!enabled||active(runRef.current))return
   queue.current=[]
-  const x=begin(s,current,Date.now());setRun(x.run);enqueue(x.commands)
+  const x=begin(s,current,Date.now(),params);setRun(x.run);enqueue(x.commands)
  }
- function cancel(){const r=runRef.current;if(r&&r.status==='running'){queue.current=queue.current.filter(c=>c.action!=='stop');setRun(cancelRun(r,Date.now()))}}
- const current=run?scenarios.find(s=>s.id===run.id):undefined,step=run&&current?current.steps[Math.min(run.step,current.steps.length-1)]:undefined
- const safe=stats.samples===0?null:stats.violations===0
+ function cancel(){const r=runRef.current;if(r&&r.status==='running'){queue.current=queue.current.filter(c=>!isStress(c,r));setRun(cancelRun(r,Date.now()))}}
+ const current=run?catalogue.find(s=>s.id===run.id):undefined,step=run&&current?current.steps[Math.min(run.step,current.steps.length-1)]:undefined
+ const safe=stats.samples===0?null:stats.violations===0,pending=!!run&&hasPending(run),settings=!!run?.snapshot,dwell=run?dwellProgress(run,grid.now):null
  return <div className="rl">
  <section className="panel rl-intro"><div><span className="eyebrow">CONTROLLED FAILURE EXPERIMENTS</span><h2>Break it on purpose. Watch the invariant hold.</h2><p>Each scenario stops real containers in the local Compose project through the label-checked controller, waits for the grid to show the effect, then restores everything. All values below are observations from dashboard polling, not guarantees.</p></div><div className="rl-intro-state"><span className={`state-chip ${enabled?'green':'muted'}`}><i/>{enabled?'Controls enabled':'Demo controls disabled'}</span><span className={`state-chip ${fresh?'green':'amber'}`}><i/>{fresh?'Fresh observations':'Observations stale or missing'}</span></div></section>
  {(!enabled||!fresh)&&!running&&<div className="rl-note" role="status"><TriangleAlert size={17}/><span>{!enabled?'The dashboard controller is not enabled, so scenarios cannot run.':'Scenarios start only on fresh observations. Stale or missing data is never treated as proof.'}</span></div>}
- {run&&current&&<section className={`rl-run rl-${run.status}`} role="status" aria-live="polite" aria-label="Scenario status"><div className="rl-run-top"><span className="rl-run-icon">{run.status==='running'||run.status==='restoring'||run.stopped.length?<LoaderCircle size={20} className="spin"/>:run.status==='done'?<Check size={20}/>:<TriangleAlert size={20}/>}</span><div><strong>{current.title}: {run.stopped.length&&run.status!=='running'&&run.status!=='restoring'?`${outcome[run.status]}, restoring services`:outcome[run.status]}</strong><p>{run.status==='running'&&step?`Step ${run.step+1} of ${current.steps.length}: ${step.label}. ${seconds(grid.now-run.stepStartedAt)} of ${seconds(step.timeoutMs)} allowed.`:run.stopped.length?`Waiting to observe ${run.stopped.join(', ')} running again. Restart is retried until a fresh observation confirms it.`:run.status==='done'?'Scenario complete. Every stopped service was observed running again.':'Run ended. Every stopped service was observed running again.'}</p></div>{run.status==='running'?<button className="button secondary rl-cancel" onClick={cancel}><Square size={14}/>Cancel and restore</button>:!run.stopped.length&&<button className="button secondary rl-cancel" onClick={()=>setRun(null)}><X size={14}/>Dismiss</button>}</div>
+ <FairSharing grid={grid} enabled={enabled} fresh={fresh} run={run} running={running} runPolicy={runPolicy} onRunPolicy={setRunPolicy} onStart={()=>start(overload,{policy:runPolicy})} onCancel={cancel} results={results}/>
+ {run&&current&&<section className={`rl-run rl-${run.status}`} role="status" aria-live="polite" aria-label="Scenario status"><div className="rl-run-top"><span className="rl-run-icon">{run.status==='running'||run.status==='restoring'||pending?<LoaderCircle size={20} className="spin"/>:run.status==='done'?<Check size={20}/>:<TriangleAlert size={20}/>}</span><div><strong>{current.title}: {pending&&run.status!=='running'&&run.status!=='restoring'?`${outcome[run.status]}, restoring ${settings?'what this run changed':'services'}`:outcome[run.status]}</strong><p>{run.status==='running'&&step?`Step ${run.step+1} of ${current.steps.length}: ${step.label}. ${seconds(grid.now-run.stepStartedAt)} of ${seconds(step.timeoutMs)} allowed.${dwell?` Observing: ${seconds(dwell.elapsedMs)} of ${seconds(dwell.totalMs)}.`:''}`:pending?`Waiting to observe ${[...run.stopped.length?[`${run.stopped.join(', ')} running again`]:[],...run.touched?.meters?['the starting meter setup restored']:[],...run.touched?.policy?['the starting allocation policy restored']:[]].join(' and ')}. ${settings?'Restoration':'Restart'} is retried until a fresh observation confirms it.`:run.status==='done'?(settings?'Scenario complete. The starting meter setup and policy were observed restored.':'Scenario complete. Every stopped service was observed running again.'):(settings?'Run ended. Everything this run changed was observed restored.':'Run ended. Every stopped service was observed running again.')}</p></div>{run.status==='running'?<button className="button secondary rl-cancel" onClick={cancel}><Square size={14}/>Cancel and restore</button>:!pending&&<button className="button secondary rl-cancel" onClick={()=>setRun(null)}><X size={14}/>Dismiss</button>}</div>
   <div className="rl-bar" aria-hidden="true"><i style={{width:`${Math.min(100,(run.status==='done'?current.steps.length:run.step)/current.steps.length*100)}%`}}/></div>
   <details className="rl-log"><summary>Run log ({run.log.length})</summary><ol>{run.log.map((l,i)=><li key={i}>{l}</li>)}</ol></details></section>}
  <section className="panel rl-proof" aria-label="Capacity proof"><div className="rl-proof-head"><div><h2>Capacity proof</h2><p>Observed in this browser since the lab opened. Stale samples are excluded.</p></div><span className={`state-chip ${safe===null?'muted':safe?'green':'amber'}`}><ShieldCheck size={12}/>{safe===null?'No fresh samples':safe?'No violation observed':'Violation observed'}</span></div>

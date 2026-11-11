@@ -1,4 +1,8 @@
+import contextlib
+import io
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -7,9 +11,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import chaos_check as cc  # noqa: E402
 
 
-def grant(request_id, version, accepted=True, status=200, amps=5, payload_hash="h"):
-    return {"request_id": request_id, "status": status, "accepted": accepted,
-            "version": version, "amps": amps, "payload_hash": payload_hash}
+def grant(request_id, version, accepted=True, status=200, amps=5, payload_hash="h",
+          lease_amps=None, partial=False):
+    row = {"request_id": request_id, "status": status, "accepted": accepted,
+           "version": version, "amps": amps, "payload_hash": payload_hash}
+    if lease_amps is not None:
+        row["lease_amps"] = lease_amps
+    if partial:
+        row["partial"] = True
+    return row
 
 
 class CheckHistoryTests(unittest.TestCase):
@@ -74,7 +84,183 @@ class CheckHistoryTests(unittest.TestCase):
         self.assertTrue(result["violations"])
 
 
+class PartialGrantHistoryTests(unittest.TestCase):
+    """fair_share may answer accepted:true, reason granted_partial, with fewer amps than requested."""
+
+    def test_partial_grants_are_normal_accepted_grants(self):
+        rows = [grant("a", 7, amps=10, lease_amps=4, partial=True), grant("b", 8, amps=5, lease_amps=5),
+                grant("c", 9, amps=12, lease_amps=12), grant("d", None, accepted=False)]
+        result = cc.check_history([], rows, 120)
+        self.assertEqual(result["violations"], [])
+        self.assertEqual(result["duplicate_versions"], [])
+
+    def test_replay_of_a_partial_grant_is_consistent(self):
+        rows = [grant("a", 7, amps=10, lease_amps=4, partial=True)] * 3
+        self.assertEqual(cc.check_history([], rows, 120)["violations"], [])
+
+    def test_replay_returning_different_lease_amps_is_flagged(self):
+        rows = [grant("a", 7, amps=10, lease_amps=4, partial=True),
+                grant("a", 7, amps=10, lease_amps=6, partial=True)]
+        self.assertTrue(cc.check_history([], rows, 120)["violations"])
+
+    def test_two_partial_grants_cannot_share_a_version(self):
+        rows = [grant("a", 7, amps=10, lease_amps=4, partial=True),
+                grant("b", 7, amps=10, lease_amps=3, partial=True)]
+        result = cc.check_history([], rows, 120)
+        self.assertEqual(result["duplicate_versions"], [7])
+        self.assertTrue(result["violations"])
+
+    def test_partial_grant_without_a_version_is_flagged(self):
+        self.assertTrue(cc.check_history([], [grant("a", None, amps=10, lease_amps=4, partial=True)],
+                                         120)["violations"])
+
+    def test_rows_without_lease_amps_still_work(self):
+        rows = [grant("a", 7), grant("a", 7)]
+        self.assertEqual(cc.check_history([], rows, 120)["violations"], [])
+
+
+class LeaseBudgetTests(unittest.TestCase):
+    def test_full_grant_needs_at_least_the_requested_amps(self):
+        self.assertTrue(cc.lease_budget_ok(5, 5, False))
+        self.assertTrue(cc.lease_budget_ok(5, 9, False))     # an older, larger reservation is kept
+        self.assertFalse(cc.lease_budget_ok(5, 4, False))
+        self.assertFalse(cc.lease_budget_ok(5, None, False))
+
+    def test_partial_grant_needs_at_most_the_requested_amps(self):
+        self.assertTrue(cc.lease_budget_ok(10, 4, True))
+        self.assertTrue(cc.lease_budget_ok(10, 10, True))
+        self.assertFalse(cc.lease_budget_ok(10, 11, True))
+        self.assertFalse(cc.lease_budget_ok(10, -1, True))
+        self.assertFalse(cc.lease_budget_ok(10, None, True))
+
+    def test_is_partial_reads_the_reason(self):
+        self.assertTrue(cc.is_partial({"accepted": True, "reason": "granted_partial"}))
+        self.assertFalse(cc.is_partial({"accepted": True, "reason": "granted"}))
+        self.assertFalse(cc.is_partial({"accepted": False, "reason": "granted_partial"}))
+        self.assertFalse(cc.is_partial({}))
+
+
+class RecordTests(unittest.TestCase):
+    """Chaos.record() with scripted responses: no network."""
+
+    def chaos(self):
+        return cc.Chaos("http://stack.invalid", 1, 10, 1, Path("unused.json"))
+
+    @staticmethod
+    def payload(amps=10):
+        return {"request_id": "r1", "building_id": "chaos-b", "session_id": "chaos-s", "amps": amps}
+
+    @staticmethod
+    def reply(reason, lease_amps, **overrides):
+        lease = {"building_id": "chaos-b", "session_id": "chaos-s", "amps": lease_amps, "version": 9}
+        data = {"request_id": "r1", "accepted": True, "reason": reason, "lease": lease, **overrides}
+        return {"status": 200, "data": data, "latency_ms": 1.0}
+
+    def test_partial_grant_is_a_normal_accepted_grant(self):
+        chaos = self.chaos()
+        row = chaos.record(self.payload(10), "new", self.reply("granted_partial", 4), "coordinator1")
+        self.assertEqual(chaos.runner_violations, [])
+        self.assertEqual((row["outcome"], row["accepted"], row["version"]), ("accepted", True, 9))
+        self.assertEqual((row["lease_amps"], row["partial"], row["amps"]), (4, True, 10))
+        self.assertEqual(list(chaos.accepted_payloads), [self.payload(10)])  # still usable for renew/conflict replays
+
+    def test_full_grant_records_the_lease_amps_it_got(self):
+        chaos = self.chaos()
+        row = chaos.record(self.payload(10), "new", self.reply("granted", 12), "coordinator1")
+        self.assertEqual(chaos.runner_violations, [])
+        self.assertEqual((row["lease_amps"], row["partial"]), (12, False))
+
+    def test_full_grant_below_the_request_is_still_a_violation(self):
+        chaos = self.chaos()
+        chaos.record(self.payload(10), "new", self.reply("granted", 4), "coordinator1")
+        self.assertEqual(len(chaos.runner_violations), 1)
+
+    def test_partial_grant_above_the_request_is_a_violation(self):
+        chaos = self.chaos()
+        chaos.record(self.payload(10), "new", self.reply("granted_partial", 11), "coordinator1")
+        self.assertEqual(len(chaos.runner_violations), 1)
+
+    def test_identity_mismatch_is_still_a_violation_for_partial_grants(self):
+        chaos = self.chaos()
+        bad = self.reply("granted_partial", 4)
+        bad["data"]["lease"]["session_id"] = "someone-else"
+        chaos.record(self.payload(10), "new", bad, "coordinator1")
+        self.assertEqual(len(chaos.runner_violations), 1)
+
+    def test_rejection_row_has_no_lease_amps(self):
+        chaos = self.chaos()
+        rejected = {"status": 200, "data": {"accepted": False, "reason": "capacity_exhausted"}, "latency_ms": 1.0}
+        row = chaos.record(self.payload(10), "new", rejected, "coordinator1")
+        self.assertEqual((row["accepted"], row["reason"], row["lease_amps"], row["partial"]),
+                         (False, "capacity_exhausted", None, False))
+        self.assertEqual(chaos.runner_violations, [])
+
+
+class PolicyReportTests(unittest.TestCase):
+    @staticmethod
+    def node(name, flag, online=True):
+        data = {} if flag is None else {"fair_share": flag}
+        return {"id": name, "online": online, "data": data}
+
+    def test_policy_summary_consistent(self):
+        nodes = [self.node("coordinator1", True), self.node("coordinator2", True), self.node("coordinator3", True)]
+        summary = cc.policy_summary(nodes)
+        self.assertEqual((summary["policy"], summary["fair_share"], summary["consistent"]),
+                         ("fair_share", True, True))
+        self.assertEqual(summary["per_node"], {"coordinator1": True, "coordinator2": True, "coordinator3": True})
+        first_come = cc.policy_summary([self.node("coordinator1", False), self.node("coordinator2", False)])
+        self.assertEqual((first_come["policy"], first_come["fair_share"]), ("first_come", False))
+
+    def test_policy_summary_ignores_offline_nodes(self):
+        nodes = [self.node("coordinator1", True), self.node("coordinator2", False, online=False)]
+        summary = cc.policy_summary(nodes)
+        self.assertEqual(summary["policy"], "fair_share")
+        self.assertNotIn("coordinator2", summary["per_node"])
+
+    def test_policy_summary_flags_disagreement_and_missing_flags(self):
+        mixed = cc.policy_summary([self.node("coordinator1", True), self.node("coordinator2", False)])
+        self.assertEqual((mixed["policy"], mixed["fair_share"], mixed["consistent"]), (None, None, False))
+        missing = cc.policy_summary([self.node("coordinator1", None)])
+        self.assertEqual((missing["policy"], missing["consistent"]), (None, False))
+        self.assertEqual(cc.policy_summary([])["policy"], None)
+
+    def test_sample_once_records_the_leaders_policy_flag(self):
+        chaos = cc.Chaos("http://stack.invalid", 1, 10, 1, Path("unused.json"))
+        leader = {"id": "coordinator1", "online": True,
+                  "data": {"state": "Leader", "quorum": True, "granted_amps": 5, "capacity_amps": 120,
+                           "leases": [{"amps": 5}], "fair_share": True}}
+        chaos.overview = lambda: {"nodes": [leader], "buildings": []}
+        chaos.sample_once()
+        self.assertIs(chaos.status_samples[0]["fair_share"], True)
+
+    def test_report_carries_the_policy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "chaos.json"
+            chaos = cc.Chaos("http://stack.invalid", 1, 10, 1, output)
+            chaos.policy_start = cc.policy_summary([self.node("coordinator1", True)])
+            chaos.policy_end = cc.policy_summary([self.node("coordinator1", True)])
+            chaos.status_samples = [{"t": 1, "fair_share": True}, {"t": 2, "fair_share": None},
+                                    {"t": 3, "fair_share": False}]
+            chaos.record(RecordTests.payload(10), "new", RecordTests.reply("granted_partial", 4), "coordinator1")
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                chaos.write_report("start", False, True)
+            report = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(report["policy"]["at_start"]["policy"], "fair_share")
+        self.assertEqual(report["policy"]["at_end"]["policy"], "fair_share")
+        self.assertEqual(report["policy"]["observed_during_run"], ["fair_share", "first_come"])
+        self.assertEqual(report["counts"]["accepted"], 1)
+        self.assertEqual(report["counts"]["accepted_partial"], 1)
+        self.assertEqual(report["history"]["violations"], [])
+        self.assertEqual(chaos.runner_violations, [])
+
+
 class ClassifyTests(unittest.TestCase):
+    def test_partial_grant_classifies_as_accepted(self):
+        self.assertEqual(cc.classify_response(200, {"accepted": True, "reason": "granted_partial"}), "accepted")
+        counts = cc.count_outcomes([
+            {"outcome": "accepted", "partial": True}, {"outcome": "accepted"}, {"outcome": "rejected"}])
+        self.assertEqual((counts["accepted"], counts["accepted_partial"], counts["rejected"]), (2, 1, 1))
+
     def test_unknown_outcomes_are_not_rejections(self):
         self.assertEqual(cc.classify_response(503, {"error": "commit outcome unknown"}), "unknown")
         self.assertEqual(cc.classify_response(0, {}), "unknown")

@@ -6,13 +6,34 @@ Requires the local dashboard/control API, Python 3.10+, and Docker Compose CLI.
 Uses only Python's standard library.
 
 Expected runtime (estimate, not measured here): a healthy run takes roughly
-8-12 minutes; the sum of all phase deadlines bounds an unhealthy run to about
-30 minutes (see EXPECTED_RUNTIME_MINUTES). Deadlines: initial readiness <=120s;
+10-14 minutes; the sum of all phase deadlines bounds an unhealthy run to about
+40 minutes (see EXPECTED_RUNTIME_MINUTES). Deadlines: initial readiness <=120s;
 gateway reclaim <=35s (x3 trials); failover <=45s (x3 trials); majority-loss
-hold 13s; PostgreSQL recovery <=45s; capacity reclaim <=35s; each load settles
+hold 13s; PostgreSQL recovery <=45s; capacity reclaim <=35s (x2, one per
+admission policy); each load settles
 10s, runs 5 measured trials of 200 requests, and observes MQTT for 5s; the
 concurrency sweep settles 10s and runs 4 levels; the end-to-end phase takes
-about 1 minute. Explicit failures can consume these deadlines.
+about 1 minute; the fair-sharing phase holds 20s quiet + 25s overload and then
+waits <=90s for convergence; each admission-policy change must be reported by the
+leader within 30s (60s when restoring at the end). Explicit failures can consume
+these deadlines.
+
+Admission policy: the coordinators run either `first_come` (all-or-nothing growth,
+capacity_exhausted when a request does not fit) or `fair_share` (the default: a
+request may be granted partially, accepted:true with reason `granted_partial` and
+lease amps below the request; requests above the whole capacity are clamped).
+The runner switches the policy with POST /api/policy and confirms it from the
+leader's status (`fair_share` flag). capacity_stress_and_idempotency runs its
+40 x 7 A burst under `first_come` (the original 17 accepted / 23 rejected / 119 A
+result, unchanged keys) and then repeats the same burst under `fair_share`, recorded
+as `fair_share_variant` (counts of full / partial / rejected grants, committed amps,
+which must not exceed capacity). fair_sharing_under_overload (after
+allocation_recovery_after_spike) forces the first-come hold (10 meters for 20s,
+then 200 meters for 25s), records each building's reserved amps and Jain's fairness
+index, switches to `fair_share` without touching demand, and times how long until
+every building's reservation is within 3 A of the leader's `fair_shares` with the
+total <= capacity. The policy is returned to `fair_share` after each of those
+phases and again in the final restore().
 
 Repeated trials: each load runs 5 trials, leader failover and gateway
 reclamation run 3 trials each. Every trial is recorded under "trials" and
@@ -79,8 +100,22 @@ RECOVERY_TIMEOUT_SECONDS = 90      # two 12 s holds plus renewal and retry margi
 RECOVERY_RATIO, RECOVERY_SLACK_AMPS = 1.5, 3
 RECOVERY_QUIET_METERS, RECOVERY_QUIET_SECONDS = 10, 20   # reservations decay to a few amps before the spike
 RECOVERY_SPIKE_MIN_AMPS = 60       # a single reservation this large means the first-come hold was reproduced
+POLICIES = ("first_come", "fair_share")
+DEFAULT_POLICY = "fair_share"      # the coordinators' default; every phase leaves the stack here
+PARTIAL_REASON = "granted_partial" # accepted:true with lease amps below the request (fair_share only)
+POLICY_TIMEOUT_SECONDS = 30        # POST accepted, then the leader must report the flag, each within this
+POLICY_RESTORE_TIMEOUT_SECONDS = 60  # final restore(): services were just started, leave room for an election
+POLICY_POLL_SECONDS = 0.5
+POLICY_RETRY_STATUSES = (0, 307, 502, 503)   # transport error / no leader yet: retried inside the deadline
+STRESS_REQUESTS, STRESS_AMPS = 40, 7         # concurrent capacity burst: one building per request
+FAIRNESS_QUIET_METERS, FAIRNESS_QUIET_SECONDS = 10, 20       # reservations decay to a few amps first
+FAIRNESS_OVERLOAD_METERS, FAIRNESS_OVERLOAD_SECONDS = 200, 25  # first-come hold forms under this load
+FAIRNESS_CONVERGENCE_TIMEOUT_SECONDS = 90   # hold decays after one 12 s hold; slack for renewals/retries
+FAIRNESS_TOLERANCE_AMPS = 3                 # "reached" = every reservation within this of its fair share
+FAIRNESS_POLL_SECONDS = 0.5
+FAIRNESS_HOG_MIN_AMPS = RECOVERY_SPIKE_MIN_AMPS  # a first-come reservation this large = one building hogging
 # Estimate only (not measured): typical healthy run and the sum-of-deadlines bound.
-EXPECTED_RUNTIME_MINUTES = {"typical": [8, 12], "deadline_bound": 30}
+EXPECTED_RUNTIME_MINUTES = {"typical": [10, 14], "deadline_bound": 40}
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -141,6 +176,85 @@ def latency_summary(rows, elapsed, workers=LOAD_WORKERS):
                            + (" concurrent client" if workers == 1 else " concurrent clients")}
 
 
+def jain_index(values):
+    """Jain's fairness index (sum x)^2 / (n * sum x^2): 1.0 when all values are equal, 1/n when one
+    takes everything. Empty or all-zero populations have no defined index (None)."""
+    values = list(values)
+    squares = sum(v * v for v in values)
+    if not values or squares == 0:
+        return None
+    if len(values) == 1:
+        return 1.0
+    return round(sum(values) ** 2 / (len(values) * squares), 4)
+
+
+def grant_amps_valid(reason, requested, lease_amps):
+    """Budget check for an accepted grant. A full grant holds at least the requested amps (an older,
+    larger reservation may be kept); a `granted_partial` grant holds at most the requested amps."""
+    if isinstance(lease_amps, bool) or not isinstance(lease_amps, (int, float)):
+        return False
+    if reason == PARTIAL_REASON:
+        return 0 <= lease_amps <= requested
+    return lease_amps >= requested
+
+
+def admission_counts(rows):
+    """Split decided grant rows into full / partial / rejected and total the amps the responses hold."""
+    full = partial = rejected = granted = 0
+    partial_amps = []
+    for row in rows:
+        if row.get("accepted") is True:
+            amps = row["data"]["lease"]["amps"]
+            granted += amps
+            if row["data"].get("reason") == PARTIAL_REASON:
+                partial += 1
+                partial_amps.append(amps)
+            else:
+                full += 1
+        elif row.get("accepted") is False:
+            rejected += 1
+    return {"full": full, "partial": partial, "rejected": rejected,
+            "granted_by_responses_amps": granted, "partial_lease_amps": partial_amps}
+
+
+def amps_by_building(rows):
+    """{building_id: amps} from a status list such as `fair_shares` or `wants`; junk rows are skipped."""
+    result = {}
+    for row in rows or []:
+        if isinstance(row, dict) and "building_id" in row and isinstance(row.get("amps"), (int, float)):
+            result[row["building_id"]] = row["amps"]
+    return result
+
+
+def reserved_by_building(leases, buildings=BUILDINGS):
+    """Reserved amps of each named building from a status `leases` list (or dict); 0 when it holds none."""
+    if isinstance(leases, dict):
+        leases = list(leases.values())
+    held = amps_by_building(leases)
+    return {building: held.get(building, 0) for building in buildings}
+
+
+def max_deviation(reserved, shares, buildings=BUILDINGS):
+    """Largest |reserved - fair share| over the buildings; None while a building has no fair share yet."""
+    if any(building not in shares for building in buildings):
+        return None
+    return max(abs(reserved.get(building, 0) - shares[building]) for building in buildings)
+
+
+def fair_shares_reached(reserved, shares, total, capacity, tolerance, buildings=BUILDINGS):
+    """Every building's reservation within `tolerance` A of its fair share and the granted total <= capacity."""
+    deviation = max_deviation(reserved, shares, buildings)
+    return deviation is not None and deviation <= tolerance and total <= capacity
+
+
+def policy_matches(node, name):
+    """True when this coordinator's status reports admission policy `name` via its `fair_share` flag."""
+    if not node:
+        return False
+    flag = node.get("data", {}).get("fair_share")
+    return isinstance(flag, bool) and flag == (name == "fair_share")
+
+
 class Evaluation:
     def __init__(self, base, project_dir, output):
         self.base = base.rstrip("/")
@@ -161,10 +275,21 @@ class Evaluation:
                                   "load_workers": LOAD_WORKERS, "sweep_workers": list(SWEEP_WORKERS),
                                   "safety_trials": SAFETY_TRIALS, "e2e_samples": E2E_SAMPLES,
                                   "e2e_poll_interval_seconds": E2E_POLL_INTERVAL_SECONDS,
+                                  "policies": list(POLICIES), "default_policy": DEFAULT_POLICY,
+                                  "policy_timeout_seconds": POLICY_TIMEOUT_SECONDS,
+                                  "capacity_stress_policies": list(POLICIES),
+                                  "fairness_quiet_meters": FAIRNESS_QUIET_METERS,
+                                  "fairness_quiet_seconds": FAIRNESS_QUIET_SECONDS,
+                                  "fairness_overload_meters": FAIRNESS_OVERLOAD_METERS,
+                                  "fairness_overload_seconds": FAIRNESS_OVERLOAD_SECONDS,
+                                  "fairness_convergence_timeout_seconds": FAIRNESS_CONVERGENCE_TIMEOUT_SECONDS,
+                                  "fairness_tolerance_amps": FAIRNESS_TOLERANCE_AMPS,
                                   "expected_runtime_minutes": EXPECTED_RUNTIME_MINUTES},
                        "limitations": ["Sampled state cannot prove absence of transients between polls.",
                                         "Trials come from one run on one stack; stdev shows run-to-run spread, not independent samples.",
                                         "Decision latency includes both accepted and rejected HTTP responses.",
+                                        "The first-come hold and the fair-share convergence time are single observations from one run; "
+                                        "whether a building hogged depends on request timing (see spike_reproduced).",
                                         "No gateway disk persistence, database failover, or physical breaker is evaluated."]}
 
     def request(self, path, payload=None, timeout=8):
@@ -203,10 +328,11 @@ class Evaluation:
                    and n.get("data", {}).get("state") == "Leader" and n["data"].get("quorum")]
         return leaders[0] if len(leaders) == 1 else None
 
-    def wait(self, description, predicate, deadline=30, interval=.5):
+    def wait(self, description, predicate, deadline=30, interval=.5, check_invariants=True):
         end, last = time.monotonic() + deadline, None
         while time.monotonic() < end:
-            self.assert_invariants()
+            if check_invariants:
+                self.assert_invariants()
             try:
                 result = predicate()
                 if result:
@@ -285,12 +411,38 @@ class Evaluation:
         response["accepted"] = accepted if response["status"] == 200 and isinstance(accepted, bool) else None
         if response["accepted"] is True:
             lease = value.get("lease", {})
+            # Full grants must hold >= the request; a granted_partial grant (fair_share) must hold <= it.
             if (value.get("request_id") != payload["request_id"]
                     or lease.get("session_id") != payload["session_id"]
                     or lease.get("building_id") != payload["building_id"]
-                    or lease.get("amps", 0) < payload["amps"] or lease.get("version", 0) <= 0):
+                    or not grant_amps_valid(value.get("reason"), payload["amps"], lease.get("amps"))
+                    or lease.get("version", 0) <= 0):
                 raise AssertionError(f"accepted response identity/budget mismatch: {response}")
         return response
+
+    def set_policy(self, name, deadline=None, check_invariants=True):
+        """Commit admission policy `name` (POST /api/policy), then wait until the leader's status reports it.
+
+        Like every other call this goes through request(): no proxy, redirects never followed, 12 s timeout.
+        Transient answers (transport error, 307/502/503 while a leader is elected) are retried inside the
+        deadline; any other refusal, or a response naming a different policy, raises at once. The deadline
+        applies to the POST and to the confirmation separately. Cleanup callers pass check_invariants=False
+        so an already-recorded violation cannot stop the policy from being restored."""
+        if name not in POLICIES:
+            raise ValueError(f"unknown admission policy {name!r}")
+        deadline = POLICY_TIMEOUT_SECONDS if deadline is None else deadline
+
+        def post():
+            response = self.request("/api/policy", {"policy": name}, timeout=12)
+            if response["status"] == 200 and response["data"].get("policy") == name:
+                return True
+            if response["status"] in POLICY_RETRY_STATUSES:
+                return False
+            raise AssertionError(f"policy change to {name} refused: {response}")
+        self.wait(f"the {name} policy to be accepted", post, deadline, POLICY_POLL_SECONDS, check_invariants)
+        self.wait(f"the leader to report the {name} policy",
+                  lambda: policy_matches(self.leader_in(self.overview()), name),
+                  deadline, POLICY_POLL_SECONDS, check_invariants)
 
     def payload(self, building, amps=1, session=None):
         return {"request_id": str(uuid.uuid4()), "building_id": f"eval-{self.run_id}-{building}",
@@ -471,48 +623,93 @@ class Evaluation:
                 "audit_rows_after": after, "outage_request_durable": True,
                 "durable_readings_delta": readings_after - readings_before, "observed_pending_during_outage": pending}
 
-    def capacity_stress(self):
-        for service in (*GATEWAYS, "meters"):
-            self.action(service, "stop")
-        self.wait("all existing capacity reclaimed", lambda: self.leader()["data"]["granted_amps"] == 0, 35)
-        node = self.leader()
-        payloads = [self.payload(f"stress-{i}", 7) for i in range(40)]
-        barrier = threading.Barrier(40)
+    def stress_burst(self, node_id, prefix):
+        """STRESS_REQUESTS concurrent STRESS_AMPS requests, one building each, released by a barrier.
+        Returns (payloads, rows, elapsed_seconds); raises on a slow fan-out or any transport/HTTP error."""
+        payloads = [self.payload(f"{prefix}-{i}", STRESS_AMPS) for i in range(STRESS_REQUESTS)]
+        barrier = threading.Barrier(STRESS_REQUESTS)
         def submit(payload):
             barrier.wait(timeout=10)
-            return self.grant(node["id"], payload)
+            return self.grant(node_id, payload)
         started = time.monotonic()
-        with ThreadPoolExecutor(max_workers=40) as workers:
+        with ThreadPoolExecutor(max_workers=STRESS_REQUESTS) as workers:
             rows = list(workers.map(submit, payloads))
         elapsed = time.monotonic() - started
         if elapsed >= 10:
             raise AssertionError("capacity fanout exceeded safe experiment window; historical accepts may have expired")
         if any(row["accepted"] is None for row in rows):
             raise AssertionError("capacity fanout had transport/HTTP errors")
-        accepted = [row for row in rows if row["accepted"] is True]
-        granted = sum(row["data"]["lease"]["amps"] for row in accepted)
+        return payloads, rows, elapsed
+
+    def capacity_stress(self):
+        """The 40 x 7 A burst under `first_come` (all-or-nothing: 17 accepted, 23 rejected, 119 A), with the
+        duplicate and conflicting-request-ID checks, then the same burst under `fair_share`."""
+        try:
+            self.set_policy("first_come")
+            for service in (*GATEWAYS, "meters"):
+                self.action(service, "stop")
+            self.wait("all existing capacity reclaimed", lambda: self.leader()["data"]["granted_amps"] == 0, 35)
+            node = self.leader()
+            payloads, rows, elapsed = self.stress_burst(node["id"], "stress")
+            if any(row["data"].get("reason") == PARTIAL_REASON for row in rows):
+                raise AssertionError("first_come policy produced a partial grant")
+            accepted = [row for row in rows if row["accepted"] is True]
+            granted = sum(row["data"]["lease"]["amps"] for row in accepted)
+            capacity = node["data"]["capacity_amps"]
+            if len(accepted) != capacity // STRESS_AMPS or granted > capacity:
+                raise AssertionError(f"capacity admission result invalid: accepted={len(accepted)}, granted={granted}, capacity={capacity}")
+            if any(row["data"].get("reason") != "capacity_exhausted" for row in rows if row["accepted"] is False):
+                raise AssertionError("stress request was rejected for a reason other than exhausted capacity")
+            snapshot = self.leader()["data"]
+            if snapshot["granted_amps"] != granted:
+                raise AssertionError("accepted stress allocations do not match authoritative committed total")
+            index = next(i for i, row in enumerate(rows) if row["accepted"] is True)
+            duplicate = self.grant(node["id"], payloads[index])
+            if duplicate["accepted"] is not True or duplicate["data"]["lease"] != rows[index]["data"]["lease"]:
+                raise AssertionError("duplicate request changed committed lease")
+            conflict = self.grant(node["id"], {**payloads[index], "amps": STRESS_AMPS + 1})
+            if conflict["accepted"] is True or (conflict["status"] != 409 and conflict["data"].get("reason") != "request_id_conflict"):
+                raise AssertionError(f"conflicting request-ID reuse not explicitly rejected: {conflict}")
+            self.wait("stress allocations reclaimed", lambda: self.leader()["data"]["granted_amps"] == 0, 35)
+            variant = self.fair_share_stress()
+            for service in (*GATEWAYS, "meters"):
+                self.action(service, "start")
+            self.wait("MQTT gateways restored", lambda: self.totals(self.overview())["meters"] == 50, 30)
+            return {"policy": "first_come", "concurrent_requests": STRESS_REQUESTS, "requested_amps_each": STRESS_AMPS,
+                    "accepted": len(accepted), "rejected": STRESS_REQUESTS - len(accepted),
+                    "committed_amps": granted, "capacity_amps": capacity,
+                    "fanout_seconds": round(elapsed, 3), "duplicate_preserved_lease": True, "conflict_rejected": True,
+                    "fair_share_variant": variant}
+        finally:
+            self.restore_policy("capacity stress")
+
+    def fair_share_stress(self):
+        """The same burst under `fair_share`, on fresh buildings, with gateways and meters still stopped and
+        no capacity held. Requests may now be granted partially, so only the committed total is asserted."""
+        self.set_policy("fair_share")
+        node = self.leader()
         capacity = node["data"]["capacity_amps"]
-        if len(accepted) != capacity // 7 or granted > capacity:
-            raise AssertionError(f"capacity admission result invalid: accepted={len(accepted)}, granted={granted}, capacity={capacity}")
-        if any(row["data"].get("reason") != "capacity_exhausted" for row in rows if row["accepted"] is False):
-            raise AssertionError("stress request was rejected for a reason other than exhausted capacity")
-        snapshot = self.leader()["data"]
-        if snapshot["granted_amps"] != granted:
-            raise AssertionError("accepted stress allocations do not match authoritative committed total")
-        index = next(i for i, row in enumerate(rows) if row["accepted"] is True)
-        duplicate = self.grant(node["id"], payloads[index])
-        if duplicate["accepted"] is not True or duplicate["data"]["lease"] != rows[index]["data"]["lease"]:
-            raise AssertionError("duplicate request changed committed lease")
-        conflict = self.grant(node["id"], {**payloads[index], "amps": 8})
-        if conflict["accepted"] is True or (conflict["status"] != 409 and conflict["data"].get("reason") != "request_id_conflict"):
-            raise AssertionError(f"conflicting request-ID reuse not explicitly rejected: {conflict}")
-        self.wait("stress allocations reclaimed", lambda: self.leader()["data"]["granted_amps"] == 0, 35)
-        for service in (*GATEWAYS, "meters"):
-            self.action(service, "start")
-        self.wait("MQTT gateways restored", lambda: self.totals(self.overview())["meters"] == 50, 30)
-        return {"concurrent_requests": 40, "requested_amps_each": 7, "accepted": len(accepted),
-                "rejected": 40 - len(accepted), "committed_amps": granted, "capacity_amps": capacity,
-                "fanout_seconds": round(elapsed, 3), "duplicate_preserved_lease": True, "conflict_rejected": True}
+        _, rows, elapsed = self.stress_burst(node["id"], "fairstress")
+        counts = admission_counts(rows)
+        committed = self.leader()["data"]["granted_amps"]
+        if committed > capacity:
+            raise AssertionError(f"fair_share burst committed {committed} A over the {capacity} A capacity")
+        reasons = self.reason_counts(rows)
+        self.wait("fair-share stress allocations reclaimed", lambda: self.leader()["data"]["granted_amps"] == 0, 35)
+        return {"policy": "fair_share", "concurrent_requests": STRESS_REQUESTS, "requested_amps_each": STRESS_AMPS,
+                "full": counts["full"], "partial": counts["partial"], "rejected": counts["rejected"],
+                "committed_amps": committed, "capacity_amps": capacity,
+                "granted_by_responses_amps": counts["granted_by_responses_amps"],
+                "partial_lease_amps": summarize(counts["partial_lease_amps"]),
+                "rejection_reasons": reasons, "fanout_seconds": round(elapsed, 3)}
+
+    def restore_policy(self, context):
+        """Best-effort return to the default policy after a phase; never masks the phase's own outcome."""
+        try:
+            self.set_policy(DEFAULT_POLICY, check_invariants=False)
+        except Exception as error:
+            print(f"WARN: could not restore the {DEFAULT_POLICY} policy after {context}: {error}",
+                  file=sys.stderr, flush=True)
 
     def pause(self, seconds):
         end = time.monotonic() + seconds
@@ -698,7 +895,9 @@ class Evaluation:
         """Spike demand (200 meters), return to 50 meters, and time how long until every real building again
         holds a budget that tracks its demand. With first-come allocation and reservations that never shrank,
         a building could keep its spike reservation indefinitely; with lease tiers it decays once the older,
-        larger grants can no longer be in use (one 12 s hold after the last large grant)."""
+        larger grants can no longer be in use (one 12 s hold after the last large grant). Runs under the
+        `first_come` policy so the first-come hold forms and the tier decay is what is measured;
+        fair_sharing_under_overload measures the fair_share policy on the same spike."""
         def reserved():
             leases = self.leader()["data"]["leases"]
             return {l["building_id"]: l["amps"] for l in leases if l["building_id"] in BUILDINGS}
@@ -711,6 +910,7 @@ class Evaluation:
                 b["data"]["state"] == "active" and 1 <= held.get(b["id"], 0)
                 <= math.ceil(RECOVERY_RATIO * b["data"]["demand_amps"]) + RECOVERY_SLACK_AMPS for b in rows)
         try:
+            self.set_policy("first_come")
             # Start quiet so reservations are small, then jump to 200 meters: the first building to ask takes
             # most of the free capacity (first-come) and the others are refused until demand falls again.
             self.config(RECOVERY_QUIET_METERS)
@@ -732,12 +932,87 @@ class Evaluation:
                 self.config(50, 1.0)
             except Exception as error:
                 print(f"WARN: could not reset meters after allocation recovery: {error}", file=sys.stderr, flush=True)
-        return {"quiet_meters": RECOVERY_QUIET_METERS, "spike_meters": 200, "peak_reserved_amps_per_building": peak,
+            self.restore_policy("allocation recovery")
+        return {"policy": "first_come", "quiet_meters": RECOVERY_QUIET_METERS, "spike_meters": 200, "peak_reserved_amps_per_building": peak,
                 "buildings_without_a_reservation_during_spike": starved,
                 "spike_reproduced": peak >= RECOVERY_SPIKE_MIN_AMPS, "recovery_seconds": round(seconds, 3),
                 "reserved_after_recovery": final,
                 "criterion": f"every building 'active' with 1 <= reserved <= ceil({RECOVERY_RATIO} x demand) + "
                              f"{RECOVERY_SLACK_AMPS} A; timeout {RECOVERY_TIMEOUT_SECONDS}s"}
+
+    def fair_sharing_under_overload(self):
+        """Show the first-come hold and how fast `fair_share` undoes it, on the real buildings.
+
+        Under `first_come`: 10 meters for 20 s (reservations decay), then 200 meters at factor 1.0 for 25 s;
+        the first building to ask tends to take most of the capacity. Record each real building's reserved
+        amps and Jain's fairness index (the first_come outcome). Then switch to `fair_share` WITHOUT changing
+        demand and wait until every real building's reservation is within FAIRNESS_TOLERANCE_AMPS of the
+        leader's `fair_shares` and the granted total is <= capacity; record the seconds from the policy
+        request, the final reservations, the Jain index and the peak granted total observed. A hog that did
+        not form is reported (spike_reproduced False), not failed; failing to converge in time is a failure."""
+        peak = {"total": 0}
+
+        def observe(data):
+            peak["total"] = max(peak["total"], data["granted_amps"])
+            return data
+
+        def converged():
+            node = self.leader_in(self.overview())
+            if node is None:
+                return None
+            data = observe(node["data"])
+            reserved = reserved_by_building(data["leases"])
+            shares = amps_by_building(data.get("fair_shares"))
+            if not fair_shares_reached(reserved, shares, data["granted_amps"], data["capacity_amps"],
+                                       FAIRNESS_TOLERANCE_AMPS):
+                return None
+            return {"reserved": reserved, "shares": {b: shares[b] for b in BUILDINGS}, "data": data}
+        try:
+            self.set_policy("first_come")
+            self.config(FAIRNESS_QUIET_METERS)
+            self.pause(FAIRNESS_QUIET_SECONDS)
+            self.config(FAIRNESS_OVERLOAD_METERS, 1.0)
+            end, hog_peak = time.monotonic() + FAIRNESS_OVERLOAD_SECONDS, 0
+            while time.monotonic() < end:
+                held = reserved_by_building(observe(self.leader()["data"])["leases"])
+                hog_peak = max([hog_peak, *held.values()])
+                self.stop_sampler.wait(min(FAIRNESS_POLL_SECONDS, max(0, end - time.monotonic())))
+            data = observe(self.leader()["data"])
+            capacity = data["capacity_amps"]
+            hogged = reserved_by_building(data["leases"])
+            hog_peak = max([hog_peak, *hogged.values()])
+            first_come = {"reserved_amps": hogged, "jain_index": jain_index(hogged.values()),
+                          "peak_reserved_amps_per_building": hog_peak,
+                          "total_granted_amps": data["granted_amps"],
+                          "wants_amps": {b: v for b, v in amps_by_building(data.get("wants")).items() if b in BUILDINGS}}
+            started = time.monotonic()
+            self.set_policy("fair_share")
+            reached = self.wait("reservations to reach their fair shares", converged,
+                                FAIRNESS_CONVERGENCE_TIMEOUT_SECONDS, FAIRNESS_POLL_SECONDS)
+            seconds = time.monotonic() - started
+            final = reached["reserved"]
+            if peak["total"] > capacity:
+                raise AssertionError(f"granted total peaked at {peak['total']} A over the {capacity} A capacity")
+            fair_share = {"convergence_seconds": round(seconds, 3), "reserved_amps": final,
+                          "fair_shares": reached["shares"], "jain_index": jain_index(final.values()),
+                          "max_deviation_amps": max_deviation(final, reached["shares"]),
+                          "total_granted_amps": reached["data"]["granted_amps"]}
+        finally:
+            try:
+                self.config(50, 1.0)
+            except Exception as error:
+                print(f"WARN: could not reset meters after the fair-sharing phase: {error}", file=sys.stderr, flush=True)
+            self.restore_policy("the fair-sharing phase")
+        return {"quiet_meters": FAIRNESS_QUIET_METERS, "quiet_seconds": FAIRNESS_QUIET_SECONDS,
+                "overload_meters": FAIRNESS_OVERLOAD_METERS, "overload_seconds": FAIRNESS_OVERLOAD_SECONDS,
+                "demand_factor": 1.0, "capacity_amps": capacity, "tolerance_amps": FAIRNESS_TOLERANCE_AMPS,
+                "spike_reproduced": hog_peak >= FAIRNESS_HOG_MIN_AMPS,
+                "first_come": first_come, "fair_share": fair_share, "peak_total_amps": peak["total"],
+                "criterion": f"after the switch to fair_share (demand unchanged) every real building's reserved "
+                             f"amps within {FAIRNESS_TOLERANCE_AMPS} A of its fair share and total granted <= "
+                             f"capacity; timeout {FAIRNESS_CONVERGENCE_TIMEOUT_SECONDS}s; seconds counted from "
+                             f"the policy request; spike_reproduced = a building reserved >= "
+                             f"{FAIRNESS_HOG_MIN_AMPS} A under first_come"}
 
     def restore(self):
         # Start only the named, project-ownership-checked services. Never delete data.
@@ -752,6 +1027,11 @@ class Evaluation:
             self.report["meter_config_restored"] = self.original_config
         except Exception as error:
             self.report["meter_config_restore_error"] = str(error)
+        try:
+            self.set_policy(DEFAULT_POLICY, deadline=POLICY_RESTORE_TIMEOUT_SECONDS, check_invariants=False)
+            self.report["policy_restored"] = DEFAULT_POLICY
+        except Exception as error:
+            self.report["policy_restore_error"] = str(error)
 
     def run(self):
         worker = threading.Thread(target=self.sampler, daemon=True)
@@ -768,6 +1048,7 @@ class Evaluation:
             self.phase("concurrency_sweep", self.concurrency_sweep)
             self.phase("end_to_end_latency", self.end_to_end_latency)
             self.phase("allocation_recovery_after_spike", self.allocation_recovery)
+            self.phase("fair_sharing_under_overload", self.fair_sharing_under_overload)
             self.assert_invariants()
             if self.node_samples <= 0:
                 raise AssertionError("no actual node state was sampled")
@@ -783,7 +1064,8 @@ class Evaluation:
                 self.report["invariant_sampling"] = {"overview_samples": self.samples,
                     "node_samples": self.node_samples, "transport_errors": self.sample_errors,
                     "max_observed_granted_amps": self.max_granted, "violations": self.invariant_failures}
-            if self.invariant_failures or any(not r["started"] for r in self.report["restoration"]) or "meter_config_restore_error" in self.report:
+            if (self.invariant_failures or any(not r["started"] for r in self.report["restoration"])
+                    or "meter_config_restore_error" in self.report or "policy_restore_error" in self.report):
                 self.report["passed"] = False
             self.report["finished_at"] = datetime.now(timezone.utc).isoformat()
             self.output.parent.mkdir(parents=True, exist_ok=True)

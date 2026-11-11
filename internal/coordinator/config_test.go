@@ -36,6 +36,35 @@ func TestLeaseProtocolConfig(t *testing.T) {
 	}
 }
 
+func TestFairShareConfig(t *testing.T) {
+	for _, key := range []string{"NODE_ID", "PEERS", "HTTP_PEERS", "CAPACITY_AMPS", "LEASE_MS"} {
+		t.Setenv(key, "")
+	}
+	for _, tc := range []struct {
+		name, input string
+		want, valid bool
+	}{
+		{"unset defaults to fair share", "", true, true},
+		{"explicit true", "true", true, true},
+		{"explicit false selects first come", "false", false, true},
+		{"not a boolean", "maybe", false, false},
+		{"yes is not a Go boolean", "yes", false, false},
+		{"blank-padded", " true", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("FAIR_SHARE", tc.input)
+			cfg, err := EnvConfig()
+			if tc.valid {
+				if err != nil || cfg.FairShare != tc.want {
+					t.Fatalf("fair share=%v err=%v", cfg.FairShare, err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), "FAIR_SHARE") {
+				t.Fatalf("expected a FAIR_SHARE configuration error, got %v", err)
+			}
+		})
+	}
+}
+
 func TestNewRejectsNonProtocolLeaseBeforeStartup(t *testing.T) {
 	for _, duration := range []time.Duration{0, 5 * time.Second, 24 * time.Second} {
 		_, err := New(context.Background(), Config{Lease: duration})

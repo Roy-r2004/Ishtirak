@@ -12,6 +12,7 @@ x-coordinator: &coordinator
     DATA_DIR: /data
     CAPACITY_AMPS: "120"
     LEASE_MS: "12000"
+    FAIR_SHARE: "true"
     DATABASE_URL: "postgres://ishtirak:ishtirak_demo@postgres:5432/ishtirak?sslmode=disable"
   depends_on: {postgres: {condition: service_healthy}}
 

@@ -14,20 +14,29 @@ type Deadlines struct {
 	term   string
 	active bool
 	items  map[string]map[uint64]time.Time
+	wants  map[string]wantHold
 	ttl    time.Duration
 }
 
+// wantHold is the hold of a building's current want version.
+type wantHold struct {
+	version uint64
+	due     time.Time
+}
+
 func NewDeadlines(ttl time.Duration) *Deadlines {
-	return &Deadlines{ttl: ttl, items: map[string]map[uint64]time.Time{}}
+	return &Deadlines{ttl: ttl, items: map[string]map[uint64]time.Time{}, wants: map[string]wantHold{}}
 }
 func (d *Deadlines) Reset() {
 	d.term = ""
 	d.active = false
 	d.items = map[string]map[uint64]time.Time{}
+	d.wants = map[string]wantHold{}
 }
-func (d *Deadlines) Observe(term string, active bool, leases map[string]ledger.Lease, now time.Time) {
+func (d *Deadlines) Observe(term string, active bool, leases map[string]ledger.Lease, wants map[string]ledger.Want, now time.Time) {
 	if term != d.term || active != d.active {
 		d.items = map[string]map[uint64]time.Time{}
+		d.wants = map[string]wantHold{}
 		d.term = term
 		d.active = active
 	}
@@ -59,6 +68,33 @@ func (d *Deadlines) Observe(term string, active bool, leases map[string]ledger.L
 			delete(d.items, id)
 		}
 	}
+	// A want's hold starts when this leader term first sees its version; a refreshed want is a new version and
+	// so a new hold, and versions the ledger no longer carries are dropped.
+	for id, w := range wants {
+		if held, ok := d.wants[id]; !ok || held.version != w.Version {
+			d.wants[id] = wantHold{version: w.Version, due: now.Add(d.ttl)}
+		}
+	}
+	for id := range d.wants {
+		if _, ok := wants[id]; !ok {
+			delete(d.wants, id)
+		}
+	}
+}
+
+// DueWants returns, per building, the want version whose hold has passed. Expiring a want releases no
+// reservation (it only stops a silent building's old want from capping the others), so no ordering is needed.
+func (d *Deadlines) DueWants(now time.Time) map[string]uint64 {
+	out := map[string]uint64{}
+	if !d.active {
+		return out
+	}
+	for id, h := range d.wants {
+		if !now.Before(h.due) {
+			out[id] = h.version
+		}
+	}
+	return out
 }
 
 // Due returns, per building, the highest tier version whose hold has passed. Expiring a tier also removes

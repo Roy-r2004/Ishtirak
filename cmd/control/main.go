@@ -21,6 +21,7 @@ var services = map[string]string{
 	"gateway-hamra": "gateway-hamra", "gateway-mar-mikhael": "gateway-mar-mikhael", "gateway-achrafieh": "gateway-achrafieh",
 	"meters": "meters", "postgres": "postgres", "mosquitto": "mosquitto",
 }
+var coordinators = []string{"coordinator1", "coordinator2", "coordinator3"}
 var client = &http.Client{Timeout: 1800 * time.Millisecond}
 var docker = &http.Client{Timeout: 12 * time.Second, Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 	return (&net.Dialer{}).DialContext(ctx, "unix", "/var/run/docker.sock")
@@ -63,9 +64,9 @@ func overview(w http.ResponseWriter, r *http.Request) {
 	buildings := make([]source, 3)
 	var meters source
 	var wg sync.WaitGroup
-	for i, id := range []string{"coordinator1", "coordinator2", "coordinator3"} {
+	for i, id := range coordinators {
 		wg.Add(1)
-		go func(i int, id string) { defer wg.Done(); nodes[i] = fetch(id, "http://"+id+":8080/api/status") }(i, id)
+		go func(i int, id string) { defer wg.Done(); nodes[i] = fetch(id, coordinatorURL(id)+"/api/status") }(i, id)
 	}
 	for i, id := range []string{"hamra", "mar_mikhael", "achrafieh"} {
 		wg.Add(1)
@@ -171,11 +172,83 @@ func meterConfig(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(res.StatusCode)
 	_, _ = io.Copy(w, io.LimitReader(res.Body, 8192))
 }
+
+// coordinatorURL is where a coordinator's HTTP API lives; tests replace it.
+var coordinatorURL = func(id string) string { return "http://" + id + ":8080" }
+
+// The leader commits the change through Raft, which can take a couple of seconds; a redirect (a node that is no
+// longer the leader) is reported, never followed.
+var policyClient = &http.Client{Timeout: 4 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+
+// findLeader returns the first coordinator whose /api/status reports the Leader state, or "".
+func findLeader() string {
+	nodes := make([]source, len(coordinators))
+	var wg sync.WaitGroup
+	for i, id := range coordinators {
+		wg.Add(1)
+		go func(i int, id string) { defer wg.Done(); nodes[i] = fetch(id, coordinatorURL(id)+"/api/status") }(i, id)
+	}
+	wg.Wait()
+	for i, n := range nodes {
+		var status struct {
+			State string `json:"state"`
+		}
+		if n.Online && json.Unmarshal(n.Data, &status) == nil && status.State == "Leader" {
+			return coordinators[i]
+		}
+	}
+	return ""
+}
+
+// policy switches the admission policy: only the two whitelisted values are ever forwarded, and only to the
+// current leader's POST /api/policy, which commits it as a set_policy log entry.
+func policy(w http.ResponseWriter, r *http.Request) {
+	if !validMutation(w, r) {
+		return
+	}
+	var req struct {
+		Policy string `json:"policy"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&req) != nil || decoder.Decode(&struct{}{}) != io.EOF || (req.Policy != "fair_share" && req.Policy != "first_come") {
+		respond(w, 400, map[string]string{"error": "policy must be fair_share or first_come"})
+		return
+	}
+	leader := findLeader()
+	if leader == "" {
+		respond(w, 503, map[string]string{"error": "No coordinator leader"})
+		return
+	}
+	body, _ := json.Marshal(req)
+	forward, err := http.NewRequestWithContext(r.Context(), "POST", coordinatorURL(leader)+"/api/policy", strings.NewReader(string(body)))
+	if err != nil {
+		respond(w, 503, map[string]string{"error": "Coordinator unavailable"})
+		return
+	}
+	forward.Header.Set("Content-Type", "application/json")
+	res, err := policyClient.Do(forward)
+	if err != nil {
+		respond(w, 503, map[string]string{"error": "Coordinator unavailable"})
+		return
+	}
+	defer res.Body.Close()
+	if res.StatusCode >= 300 && res.StatusCode < 400 {
+		respond(w, 503, map[string]string{"error": "Leadership changed; retry"})
+		return
+	}
+	log.Printf("demo policy=%s leader=%s status=%d", req.Policy, leader, res.StatusCode)
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(res.StatusCode)
+	_, _ = io.Copy(w, io.LimitReader(res.Body, 8192))
+}
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/overview", overview)
 	mux.HandleFunc("/api/actions", action)
 	mux.HandleFunc("/api/meters/config", meterConfig)
+	mux.HandleFunc("/api/policy", policy)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { respond(w, 200, map[string]string{"status": "ok"}) })
 	s := &http.Server{Addr: ":8080", Handler: mux, ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 15 * time.Second}
 	log.Fatal(s.ListenAndServe())

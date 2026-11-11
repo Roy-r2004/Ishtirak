@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import { policyOf, type Policy, type Share } from './lab/fairness'
 export type Lease = { building_id:string; amps:number; version:number }
 export type Audit = { event_id:number; kind:string; building_id:string; amps:number; version:number; occurred_at:string }
-export type NodeData = { node_id:string; state:string; leader_id:string; quorum:boolean; capacity_amps:number; granted_amps:number; available_amps:number; leases:Lease[]; audit:Audit[]; postgres_connected:boolean; raft:Record<string,string>; quorum_verified_at:string }
+export type NodeData = { node_id:string; state:string; leader_id:string; quorum:boolean; capacity_amps:number; granted_amps:number; available_amps:number; leases:Lease[]; audit:Audit[]; postgres_connected:boolean; raft:Record<string,string>; quorum_verified_at:string; fair_share?:boolean; wants?:Share[]; fair_shares?:Share[] }
 export type Building = { building_id:string; name:string; meter_count:number; demand_amps:number; served_amps:number; granted_amps:number; lease_remaining_ms:number; lease_version:number; state:string; mqtt_connected:boolean; pending_readings:number; dropped_readings:number; readings_total:number; last_error:string }
 export type Meter = { meter_count:number; demand_factor:number; mqtt_connected:boolean; published_readings:number }
 export type Source<T> = { id:string; online:boolean; data?:T; error?:string }
@@ -27,9 +28,11 @@ export function useGrid(){
  const quorum=!stale&&!!leaderSource&&!!cluster?.quorum
  const buildings=data?.buildings??Object.keys(names).map(id=>({id,online:false} as Source<Building>)),nodes=data?.nodes??['coordinator1','coordinator2','coordinator3'].map(id=>({id,online:false} as Source<NodeData>))
  const served=buildings.reduce((s,b)=>s+(b.online?b.data?.served_amps??0:0),0),demand=buildings.reduce((s,b)=>s+(b.online?b.data?.demand_amps??0:0),0)
- async function post(path:string,body:object,key:string){if(actionLock.current)return;actionLock.current=true;setBusy(key);setNotice(null);try{const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(15000)});const raw=await response.text();if(!response.ok){let message=raw;try{message=JSON.parse(raw).error??raw}catch{}throw Error(message)}setNotice({text:key==='simulation'?'Simulation updated. Live readings will follow.':`${key.replaceAll('-',' ')} completed.`,failed:false})}catch(e){setNotice({text:`Action failed: ${e instanceof Error?e.message:'Unknown error'}`,failed:true})}finally{actionLock.current=false;setBusy('')}}
+ async function post(path:string,body:object,key:string,success?:string){if(actionLock.current)return;actionLock.current=true;setBusy(key);setNotice(null);try{const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(15000)});const raw=await response.text();if(!response.ok){let message=raw;try{message=JSON.parse(raw).error??raw}catch{}throw Error(message)}setNotice({text:success??(key==='simulation'?'Simulation updated. Live readings will follow.':`${key.replaceAll('-',' ')} completed.`),failed:false})}catch(e){setNotice({text:`Action failed: ${e instanceof Error?e.message:'Unknown error'}`,failed:true})}finally{actionLock.current=false;setBusy('')}}
+ const policy:Policy|null=policyOf(cluster?.fair_share)
+ function setPolicy(next:Policy){return post('/api/policy',{policy:next},'policy',next==='fair_share'?'Fair sharing enabled.':'First come enabled.')}
  function act(service:string,action:string){void post('/api/actions',{service,action},`${action}-${service}`)}
  function exportAudit(){const blob=new Blob([JSON.stringify({exported_at:new Date().toISOString(),snapshot_observed_at:data?.observed_at,events:cluster?.audit??[],note:'Latest 100 replicated events; full history is stored in PostgreSQL.'},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='ishtirak-audit.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
- return{data,history,lastSeen,now,error,busy,notice,setNotice,stale,streamLive,cluster,quorum,buildings,nodes,served,demand,act,post,exportAudit}
+ return{data,history,lastSeen,now,error,busy,notice,setNotice,stale,streamLive,cluster,quorum,buildings,nodes,served,demand,act,post,exportAudit,policy,setPolicy}
 }
 export type Grid=ReturnType<typeof useGrid>
