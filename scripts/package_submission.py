@@ -12,7 +12,7 @@ for name in ('README.md', 'Dockerfile', 'compose.yaml', 'go.mod', 'go.sum', '.do
     selected.append(ROOT / name)
 for directory in ('cmd', 'internal', 'web', 'deploy', 'scripts', 'docs'):
     for current, dirs, files in os.walk(ROOT / directory, followlinks=False):
-        dirs[:] = [d for d in dirs if d not in ('node_modules', 'dist', '__pycache__', '.git')
+        dirs[:] = [d for d in dirs if d not in ('node_modules', 'dist', '__pycache__', '.git', 'shots', 'preview', 'artifacts')
                    and not (Path(current) / d).is_symlink()
                    and not os.path.isjunction(Path(current) / d)]
         for name in files:
@@ -22,7 +22,7 @@ for directory in ('cmd', 'internal', 'web', 'deploy', 'scripts', 'docs'):
             if file.is_symlink() or not file.resolve().is_relative_to(ROOT):
                 raise RuntimeError('Refusing nonlocal source path')
             selected.append(file)
-for name in ('evaluation.json', 'chaos-check.json', 'browser-check.json', 'dashboard-desktop.png', 'dashboard-lab-desktop.png',
+for name in ('evaluation.json', 'chaos-check.json', 'native-cluster-check.json', 'browser-check.json', 'dashboard-desktop.png', 'dashboard-lab-desktop.png',
              'dashboard-lab-after-failover.png', 'dashboard-mobile.png', 'verification.txt'):
     selected.append(ROOT / 'artifacts' / name)
 secret_pattern = re.compile(rb'(?:apikey_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{30,})')

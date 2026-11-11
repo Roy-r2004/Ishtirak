@@ -88,7 +88,7 @@ The integration/evaluation runner exercises the running stack, briefly stops pro
 python scripts/evaluate.py
 ```
 
-See [the report](docs/PROJECT_REPORT.md), [submission PDF](docs/Ishtirak_Project_Report.pdf), and [raw evaluation](artifacts/evaluation.json) for the results and limitations. The [PowerPoint](docs/Ishtirak_Presentation.pptx) contains 16 slides with a speaking script in the notes.
+See [the report](docs/PROJECT_REPORT.md), [submission PDF](docs/Ishtirak_Project_Report.pdf), and [raw evaluation](artifacts/evaluation.json) for the results and limitations. The [PowerPoint](docs/Ishtirak_Presentation.pptx) contains 17 slides with a speaking script in the notes.
 
 The completed run passed all twelve integration phases, with no capacity violations in 947 coordinator observations. The simultaneous 40-request stress admitted 17 requests of 7 A each: 119 A under the 120 A limit. Load results are the mean of five trials, failover and reclamation of three, with a concurrency sweep to 64 clients, an end-to-end telemetry latency and a demand-spike recovery phase (every building back within budget 17.6 s after the spike). The run before the lease-tier change is kept as `artifacts/evaluation-before-tiers.json`. The report explains the sampling and timing limits.
 
