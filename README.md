@@ -12,7 +12,7 @@ Install Docker Desktop with Linux containers, then run from this directory:
 docker compose up --build -d
 ```
 
-Open **http://localhost:8088**. The dashboard is a single electrical-switchboard screen: a needle ammeter for the 120 A generator with a peak needle, one relay card per coordinator, one breaker and meter per building, a ledger tape of allocation events, and a test panel with guarded failure scenarios, the Overload test and the meter simulator. Add `?demo=1` to the address to see it on simulated data without any backend (a permanent "Simulated data" plate marks it). Startup usually takes a few seconds after images finish building. The initial simulation has 50 household meters across three buildings, sharing a 120 A generator.
+Open **http://localhost:8088**. The dashboard is the **Ishtirak Console**, a single screen built like an electrical single-line diagram: the 120 A generator at the top, a bus line down to one feeder per building (with its breaker, demand, reserved amps, fair share and lease tiers), a Capacity panel (reserved against 120 A, peak, violation counter, a one-line capacity proof), the Raft cluster with a Coordinators table, and a dock with the Allocation log, the Failure tests, the meter Simulation and a history Chart. A switch in the top bar changes the admission policy between fair sharing and first come. Add `?demo=1` to the address to see it on simulated data without any backend (a permanent "Simulated data" chip marks it). Startup usually takes a few seconds after images finish building. The initial simulation has 50 household meters across three buildings, sharing a 120 A generator.
 
 ```powershell
 docker compose ps
@@ -37,16 +37,19 @@ There is no shared-memory coordinator ledger. Each coordinator owns an independe
 
 ## Try the live demonstration
 
-The quickest tour is the dashboard's **Resilience lab**: four guided scenarios (leader failover, majority loss, gateway crash, database outage) that stop real containers, show a live capacity proof (peak granted against 120 A), a per-coordinator Raft view and a timeline of observed changes, and always restore what they stopped. The manual steps below do the same by hand.
+The quickest tour is the dock's **Failure tests** tab: four guided scenarios (leader failover, majority loss, gateway crash, database outage) that stop real containers after an inline Confirm, show a live capacity proof (peak granted against 120 A), the coordinators' roles and a timeline of observed changes, and always restore what they stopped. The manual steps below do the same by hand.
 
-1. Observe the granted-capacity total, remaining capacity, and three reporting gateways.
-2. In **Coordinator cluster**, take the current leader offline. Watch a replacement leader appear, then bring the old node online.
-3. Stop two coordinators. The dashboard reports lost quorum, new grants stop, and gateways stop serving when their safe local deadlines expire. Restore both nodes.
-4. On a building card, simulate a gateway failure. Its committed budget remains reserved conservatively before reclamation. Restart the gateway; it uses a fresh session and waits for safe admission.
-5. In **Simulation lab**, stop PostgreSQL. Raft continues capacity decisions; audit entries catch up when the database returns. Buffered readings can be lost if their gateway crashes.
-6. Set 10, 50, or 200 meters and vary the demand multiplier. The UI separates requested demand, served demand, and reserved capacity; excess demand is curtailed rather than treated as extra authorized capacity.
+1. Observe the Capacity panel (reserved against 120 A, free, served, curtailed) and the three reporting buildings.
+2. In the **Coordinators** table, stop the current leader (Stop, then Confirm). Watch a replacement leader appear, then start the old node again.
+3. Stop two coordinators. The console reports lost quorum, new grants stop, and gateways stop serving when their safe local deadlines expire. Start both nodes again.
+4. On a building, open its breaker (the breaker symbol, then Confirm) to simulate a gateway failure. Its committed budget remains reserved conservatively before reclamation. Close it again; the gateway uses a fresh session and waits for safe admission.
+5. In the **Simulation** tab, stop PostgreSQL. Raft continues capacity decisions; audit entries catch up when the database returns. Buffered readings can be lost if their gateway crashes.
+6. Set 10, 50, or 200 meters and vary the demand multiplier. The console separates requested demand, served demand, and reserved capacity; excess demand is curtailed rather than treated as extra authorized capacity.
+7. Run the **Overload test** under each admission policy (the policy switch is in the top bar). Under first come one building can keep most of the generator; under fair sharing the buildings converge on equal shares.
 
-Reservations are tiered: a renewal adds a short-lived tier and the reserved amount steps down to a building's current demand about 12 seconds after demand falls (the Activity log shows "Reservation reduced"), but never while an older, larger grant could still be in use. Allocation is still first-come, so while two buildings both demand more than the free capacity the first keeps it. `python scripts/reset_demo.py` restarts the gateways for an immediate clean state. The design and its safety argument are in [docs/LEASE_TIERS.md](docs/LEASE_TIERS.md) and the report.
+Reservations are tiered: a renewal adds a short-lived tier and the reserved amount steps down to a building's current demand about 12 seconds after demand falls (the Allocation log shows "Reduced"), but never while an older, larger grant could still be in use.
+
+**Fair sharing** (the default) is max-min fairness over what the buildings currently want. Each request records the building's want; a grant authorizes the lesser of its want and its share, and a building that wants more than its share is capped on renewal, so its older, larger tier lapses on its own and the freed amps go to the buildings that were starved. At 120 A, wants of 102/99/98 A settle at 40/40/40 A and 10/100/100 A at 10/55/55 A. The policy is a committed Raft command, so every replica switches at the same log index; a safety gate keeps it off while any coordinator is unreachable or lacks support. `first_come` (the previous rule) remains selectable. See [docs/FAIR_SHARING.md](docs/FAIR_SHARING.md). `python scripts/reset_demo.py` restarts the gateways for an immediate clean state. The tier design and its safety argument are in [docs/LEASE_TIERS.md](docs/LEASE_TIERS.md) and the report.
 
 The local demo controller holds the Docker socket and only permits start/stop/restart of this project's named, label-verified containers. This is a trusted local demonstration capability, not a public deployment design. Disable `ENABLE_DEMO` and remove the socket mount before reusing the application outside this setting. The included database password is a public demo fixture, not a production credential.
 
@@ -96,6 +99,12 @@ python scripts/chaos_check.py --seed 1 --duration 90
 python scripts/chaos_check.py --seed 1 --duration 90 --dry-run   # print the schedule only
 ```
 
+Fair sharing on three real coordinator processes without Docker (build `cmd/coordinator` first; the result is in `artifacts/native-cluster-check.json`):
+
+```powershell
+python -I scripts/native_cluster_check.py --binary path\to\coordinator.exe --work path\to\scratch
+```
+
 Additional checks:
 
 ```powershell
@@ -105,7 +114,7 @@ python -I -m unittest discover -s scripts -p "test_*.py"
 node scripts/browser-check.mjs
 ```
 
-Browser checks require Node 24 and Chrome; `CHROME_PATH` overrides the Windows default. They run the Resilience lab's leader-failover scenario against the live stack. Run the evaluation, the fault check and the browser checks one at a time, because each changes the running system. To regenerate the PDF, install ReportLab in a Python environment and run `python scripts/render_report.py`.
+Browser checks require Node 24 and Chrome; `CHROME_PATH` overrides the Windows default. They run the Failure tests' leader-failover scenario against the live stack. Run the evaluation, the fault check and the browser checks one at a time, because each changes the running system. To regenerate the PDF, install ReportLab in a Python environment and run `python scripts/render_report.py`.
 
 ## Project map
 
@@ -115,7 +124,7 @@ internal/ledger/      deterministic Raft state machine and safety tests
 internal/coordinator/ Raft lifecycle, HTTP/WebSocket API, monotonic holds
 internal/telemetry/   MQTT aggregation, safe gateway budgets, simulation
 internal/storage/     PostgreSQL schema, event replay, durable readings
-web/                  React/TypeScript dashboard (incl. Resilience lab) and Nginx proxy
+web/                  React/TypeScript Ishtirak Console (incl. Failure tests) and Nginx proxy
 deploy/               Mosquitto configuration
 scripts/              evaluation, randomized fault check, demo reset, browser checks, tests
 artifacts/            measured evidence: evaluation, fault check, browser check, screenshots
@@ -125,7 +134,7 @@ compose.yaml          complete local environment
 
 ## Deliberate limits
 
-No physical relays, billing engine, authentication product, replicated PostgreSQL, standby gateway, Kafka, Kubernetes, or external AI is added. Readings published during gateway downtime may be lost. Gateway queues are bounded and report drops. Request history and audit outbox are retained for this bounded prototype and grow over time; production retention requires a separate safety design. Fair scheduling and shrinking active reservations are not implemented. UI status and quorum checks are timestamped observations, not a linearizable physical-world measurement.
+No physical relays, billing engine, authentication product, replicated PostgreSQL, standby gateway, Kafka, Kubernetes, or external AI is added. Readings published during gateway downtime may be lost. Gateway queues are bounded and report drops. Request history and audit outbox are retained for this bounded prototype and grow over time; production retention requires a separate safety design. Fair sharing has no priority classes (every building is equal) and building ids are not authenticated. UI status and quorum checks are timestamped observations, not a linearizable physical-world measurement.
 
 Do not reset only one side of the persistent system: resetting Raft history while retaining SQL audit IDs invalidates correspondence. For a fresh demo, stop all gateways and reset the entire Compose project's volumes together, only when data deletion is intended.
 

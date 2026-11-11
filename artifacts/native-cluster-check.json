@@ -1,0 +1,120 @@
+{
+  "started_at": "2026-11-11T11:26:42.254918+00:00",
+  "environment": "three coordinator processes on localhost, no Docker, no database",
+  "capacity_amps": 120,
+  "checks": [
+    {
+      "name": "cluster forms with a leader and quorum",
+      "passed": true,
+      "leader": "coordinator1"
+    },
+    {
+      "name": "fair_share is committed on its own once every peer supports it",
+      "passed": true
+    },
+    {
+      "name": "the policy endpoint refuses a missing or wrong admin token",
+      "passed": true,
+      "missing": 403,
+      "wrong": 403
+    },
+    {
+      "name": "first_come lets one building hold 102 A while the others get 7 A and 4 A",
+      "passed": true,
+      "reserved": {
+        "achrafieh": 4,
+        "hamra": 102,
+        "mar_mikhael": 7
+      }
+    },
+    {
+      "name": "fair_share moves a hog (102/7/4 A) to the max-min shares (40 A each)",
+      "passed": true,
+      "seconds": 13.05,
+      "reserved": {
+        "achrafieh": 40,
+        "hamra": 40,
+        "mar_mikhael": 40
+      },
+      "expected": {
+        "hamra": 40.0,
+        "mar_mikhael": 40.0,
+        "achrafieh": 40.0
+      }
+    },
+    {
+      "name": "a changed demand mix (10/100/100 A) converges to 10/55/55 A",
+      "passed": true,
+      "seconds": 12.5,
+      "reserved": {
+        "achrafieh": 55,
+        "hamra": 10,
+        "mar_mikhael": 55
+      },
+      "expected": {
+        "hamra": 10,
+        "mar_mikhael": 55.0,
+        "achrafieh": 55.0
+      }
+    },
+    {
+      "name": "a new leader is elected within a bound after the leader is killed",
+      "passed": true,
+      "old": "coordinator1",
+      "new": "coordinator2",
+      "seconds": 3.05
+    },
+    {
+      "name": "grants continue under the new leader and the shares hold",
+      "passed": true,
+      "new_grants_accepted": 6,
+      "seconds": 0.05,
+      "reserved": {
+        "achrafieh": 40,
+        "hamra": 40,
+        "mar_mikhael": 40
+      },
+      "expected": {
+        "hamra": 40.0,
+        "mar_mikhael": 40.0,
+        "achrafieh": 40.0
+      }
+    },
+    {
+      "name": "the restarted node rejoins and every replica ends in the same state",
+      "passed": true,
+      "applied_index": "124",
+      "reserved": {
+        "achrafieh": 40,
+        "hamra": 40,
+        "mar_mikhael": 40
+      }
+    },
+    {
+      "name": "the granted total never exceeded the capacity on any live node",
+      "passed": true,
+      "samples": 211,
+      "max_granted": 120,
+      "violations": []
+    }
+  ],
+  "passed": true,
+  "gateway_requests": {
+    "requests": 108,
+    "accepted": 108,
+    "partial": 103,
+    "refused": 0,
+    "unreachable": 7
+  },
+  "sampling": {
+    "samples": 211,
+    "max_granted_amps": 120,
+    "violations": []
+  },
+  "finished_at": "2026-11-11T11:27:33.733821+00:00",
+  "limits": [
+    "Sampling about twice a second is evidence, not a proof.",
+    "One run on one machine; the processes share a clock and a loopback network.",
+    "No gateways, MQTT, PostgreSQL, nginx or control service: those are covered by their own tests and the Docker evaluation."
+  ]
+}
