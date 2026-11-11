@@ -305,7 +305,13 @@ func (f *FSM) Apply(log *raft.Log) interface{} {
 		// max-min share, and then only as much growth as the free capacity holds.
 		amps := r.Amps
 		if fair {
-			amps = min(f.state.Wants[r.BuildingID].Amps, FairShares(f.state)[r.BuildingID])
+			if w, ok := f.state.Wants[r.BuildingID]; ok {
+				amps = min(w.Amps, FairShares(f.state)[r.BuildingID])
+			} else {
+				// No want could be recorded (the set is full of other leaseholders): the building keeps what it
+				// already holds, without growth, instead of falling to a share of 0 and losing service.
+				amps = min(r.Amps, current.Amps)
+			}
 			if amps > current.Amps {
 				amps = current.Amps + min(amps-current.Amps, f.state.Capacity-Granted(f.state))
 			}
@@ -362,16 +368,20 @@ func (l Lease) HasTier(version uint64) bool {
 }
 
 // admitWant reports whether building b may record a want, making room by eviction when the set is full. A known
-// building always refreshes, and a building that holds a lease is admitted up to MaxWantsHard.
-// Otherwise the oldest want of a building holding no lease is evicted (lowest log index, then lowest id; the choice
-// is deterministic), so a flood of invented ids can only displace other lease-less wants, never a building that is
-// being served. When every want belongs to a leaseholder the newcomer is refused.
+// building always refreshes. A building that holds a lease may take the set up to MaxWantsHard, any other building up
+// to MaxWants. Beyond its limit the oldest want of a building holding no lease is evicted (lowest log index, then
+// lowest id; the choice is deterministic), so a flood of invented ids can only displace other lease-less wants, never
+// a building that is being served. When every want belongs to a leaseholder the building is refused a slot.
 func (f *FSM) admitWant(b string) bool {
-	if _, known := f.state.Wants[b]; known || len(f.state.Wants) < MaxWants {
+	if _, known := f.state.Wants[b]; known {
 		return true
 	}
+	limit := MaxWants
 	if _, holds := f.state.Leases[b]; holds {
-		return len(f.state.Wants) < MaxWantsHard
+		limit = MaxWantsHard
+	}
+	if len(f.state.Wants) < limit {
+		return true
 	}
 	victim, version, found := "", uint64(0), false
 	for id, w := range f.state.Wants {

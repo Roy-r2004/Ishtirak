@@ -169,3 +169,44 @@ func TestLeaseholderBypassHasAHardBound(t *testing.T) {
 	checkWantInvariants(t, f, "hard bound")
 	checkInvariants(t, f, "hard bound")
 }
+
+// A leaseholder that cannot get a want slot (the set is full of other leaseholders) keeps what it holds under
+// fair_share instead of falling to a share of 0, and never grows.
+func TestLeaseholderWithoutAWantSlotKeepsItsReservation(t *testing.T) {
+	f := initializedFSM(100000)
+	var index uint64 = 1
+	const buildings = MaxWantsHard + 20
+	for round := 0; round < 2; round++ { // grant, then renew so every building holds a lease and asks for a want slot
+		for i := 0; i < buildings; i++ {
+			index++
+			apply(f, index, 1, grant(fmt.Sprintf("a%d-%d", round, i), fmt.Sprintf("b-%d", i), "s", 1))
+		}
+	}
+	if got := len(wantsOf(f)); got != MaxWantsHard {
+		t.Fatalf("setup: expected the set at its hard ceiling %d, got %d", MaxWantsHard, got)
+	}
+	var starved string
+	for i := 0; i < buildings; i++ {
+		if _, ok := wantsOf(f)[fmt.Sprintf("b-%d", i)]; !ok {
+			starved = fmt.Sprintf("b-%d", i)
+			break
+		}
+	}
+	if starved == "" {
+		t.Fatal("setup: expected a leaseholder without a want slot")
+	}
+	index++
+	apply(f, index, 1, setPolicy("fair_share"))
+	before := Granted(f.View())
+	index++
+	res := apply(f, index, 1, grant("renew-1", starved, "s", 5))
+	if !res.Accepted || res.Lease == nil || res.Lease.Amps != 1 || res.Reason != "granted_partial" {
+		t.Fatalf("a leaseholder without a want slot must keep its reservation without growth: %+v", res)
+	}
+	if reserved(f, starved) != 1 || Granted(f.View()) != before {
+		t.Fatalf("no growth is allowed: reserved %d, total %d -> %d", reserved(f, starved), before, Granted(f.View()))
+	}
+	// Freed room lets it back in: eviction is attempted first, so a lease-less want makes space.
+	checkWantInvariants(t, f, "no slot")
+	checkInvariants(t, f, "no slot")
+}

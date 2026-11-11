@@ -74,7 +74,7 @@ spec, and 42 mutants) found no capacity-safety, determinism or fairness-arithmet
   policy unset (which behaves as `first_come`, the safe default) and `POST /api/policy` refuses `fair_share` with 409.
   Switching to `first_come` is always allowed. Upgrade all three coordinators together regardless.
 - **Bounded want set.** Building ids are not authenticated, so the set of wants is bounded (`MaxWants = 64`). A known building
-  always refreshes its want; a building that holds a lease is admitted up to a hard ceiling (`MaxWantsHard` = 256, independent of the generator's capacity); a newcomer
+  always refreshes its want; a building that holds a lease may take the set up to a hard ceiling (`MaxWantsHard` = 256, independent of the generator's capacity), and at its limit it evicts a lease-less want like any newcomer; a building that still cannot get a slot (every want belongs to a leaseholder) keeps what it already holds under `fair_share`, without growth, instead of falling to a share of 0; a newcomer
   evicts the oldest want of a building that holds no lease (lowest log index, then lowest id, so every replica chooses the
   same one) and is refused only if every want belongs to a leaseholder. A flood of invented ids can therefore displace other
   lease-less wants but never a building that is being served.
