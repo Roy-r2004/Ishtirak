@@ -114,7 +114,7 @@ python -I -m unittest discover -s scripts -p "test_*.py"
 node scripts/browser-check.mjs
 ```
 
-Browser checks require Node 24 and Chrome; `CHROME_PATH` overrides the Windows default. They run the Failure tests' leader-failover scenario against the live stack. Run the evaluation, the fault check and the browser checks one at a time, because each changes the running system. To regenerate the PDF, install ReportLab in a Python environment and run `python scripts/render_report.py`.
+Browser checks require Node 24 and Chrome; `CHROME_PATH` overrides the Windows default. They run the Failure tests' leader-failover scenario against the live stack. Of three live runs of the 40-check test, one passed (`artifacts/browser-check.json`); the report records the two that did not. Run the evaluation, the fault check and the browser checks one at a time, because each changes the running system. To regenerate the PDF, install ReportLab in a Python environment and run `python scripts/render_report.py`.
 
 ## Project map
 

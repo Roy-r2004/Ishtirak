@@ -1,0 +1,223 @@
+{
+  "run_id": "d1a47a2a414f",
+  "started_at": "2026-11-11T12:04:30.052220+00:00",
+  "base_url": "http://127.0.0.1:8088",
+  "phases": {
+    "readiness_and_real_mqtt": {
+      "passed": true,
+      "seconds": 3.562,
+      "leader": "coordinator3",
+      "durable_readings": 17832907
+    },
+    "gateway_crash_and_reclamation": {
+      "passed": true,
+      "seconds": 48.813,
+      "building": "hamra",
+      "reclaim_seconds": 12.906,
+      "previous_amps": 31,
+      "fresh_session_verified": true,
+      "trials": [
+        {
+          "trial": 1,
+          "building": "achrafieh",
+          "reclaim_seconds": 15.609,
+          "previous_amps": 23,
+          "fresh_session_verified": true
+        },
+        {
+          "trial": 2,
+          "building": "hamra",
+          "reclaim_seconds": 12.906,
+          "previous_amps": 31,
+          "fresh_session_verified": true
+        },
+        {
+          "trial": 3,
+          "building": "achrafieh",
+          "reclaim_seconds": 12.187,
+          "previous_amps": 27,
+          "fresh_session_verified": true
+        }
+      ],
+      "summary": {
+        "reclaim_seconds": {
+          "n": 3,
+          "mean": 13.567,
+          "stdev": 1.804,
+          "min": 12.187,
+          "max": 15.609
+        }
+      },
+      "headline_basis": "top-level fields are from the median trial by reclaim_seconds (trial 2 of 3); see trials and summary"
+    },
+    "leader_failure": {
+      "passed": true,
+      "seconds": 55.093,
+      "previous_leader": "coordinator2",
+      "replacement_leader": "coordinator1",
+      "majority_grant_seconds": 4.109,
+      "trials": [
+        {
+          "trial": 1,
+          "previous_leader": "coordinator3",
+          "replacement_leader": "coordinator1",
+          "majority_grant_seconds": 4.11
+        },
+        {
+          "trial": 2,
+          "previous_leader": "coordinator1",
+          "replacement_leader": "coordinator2",
+          "majority_grant_seconds": 4.016
+        },
+        {
+          "trial": 3,
+          "previous_leader": "coordinator2",
+          "replacement_leader": "coordinator1",
+          "majority_grant_seconds": 4.109
+        }
+      ],
+      "summary": {
+        "majority_grant_seconds": {
+          "n": 3,
+          "mean": 4.078,
+          "stdev": 0.054,
+          "min": 4.016,
+          "max": 4.11
+        }
+      },
+      "headline_basis": "top-level fields are from the median trial by majority_grant_seconds (trial 3 of 3); see trials and summary"
+    },
+    "majority_loss": {
+      "passed": true,
+      "seconds": 33.61,
+      "survivor": "coordinator1",
+      "new_grant_attempts": [
+        {
+          "status": 503,
+          "accepted": null,
+          "reason": "no elected leader"
+        },
+        {
+          "status": 503,
+          "accepted": null,
+          "reason": "no elected leader"
+        },
+        {
+          "status": 503,
+          "accepted": null,
+          "reason": "no elected leader"
+        }
+      ],
+      "served_after_13s": 0
+    },
+    "postgres_outage_and_audit_catchup": {
+      "passed": false,
+      "seconds": 64.312,
+      "error": "Command '['docker', 'compose', '--project-directory', 'D:\\\\Dist_FP\\\\Dist_FP', 'exec', '-T', 'postgres', 'psql', '-U', 'ishtirak', '-d', 'ishtirak', '-At', '-v', 'ON_ERROR_STOP=1', '-c', 'SELECT count(*) FROM readings']' timed out after 15 seconds"
+    }
+  },
+  "restoration": [
+    {
+      "service": "postgres",
+      "started": false,
+      "error": "start postgres failed: {'status': 0, 'data': {}, 'error': 'timed out', 'latency_ms': 12031.259}"
+    },
+    {
+      "service": "mosquitto",
+      "started": false,
+      "error": "start mosquitto failed: {'status': 0, 'data': {}, 'error': 'Remote end closed connection without response', 'latency_ms': 915.228}"
+    },
+    {
+      "service": "coordinator1",
+      "started": false,
+      "error": "start coordinator1 failed: {'status': 0, 'data': {}, 'error': 'Remote end closed connection without response', 'latency_ms': 48.686}"
+    },
+    {
+      "service": "coordinator2",
+      "started": false,
+      "error": "start coordinator2 failed: {'status': 0, 'data': {}, 'error': 'Remote end closed connection without response', 'latency_ms': 44.641}"
+    },
+    {
+      "service": "coordinator3",
+      "started": false,
+      "error": "start coordinator3 failed: {'status': 0, 'data': {}, 'error': 'Remote end closed connection without response', 'latency_ms': 40.325}"
+    },
+    {
+      "service": "gateway-hamra",
+      "started": false,
+      "error": "start gateway-hamra failed: {'status': 0, 'data': {}, 'error': 'Remote end closed connection without response', 'latency_ms': 39.642}"
+    },
+    {
+      "service": "gateway-mar-mikhael",
+      "started": false,
+      "error": "start gateway-mar-mikhael failed: {'status': 0, 'data': {}, 'error': 'Remote end closed connection without response', 'latency_ms': 59.496}"
+    },
+    {
+      "service": "gateway-achrafieh",
+      "started": false,
+      "error": "start gateway-achrafieh failed: {'status': 0, 'data': {}, 'error': 'Remote end closed connection without response', 'latency_ms': 40.143}"
+    },
+    {
+      "service": "meters",
+      "started": false,
+      "error": "start meters failed: {'status': 0, 'data': {}, 'error': 'Remote end closed connection without response', 'latency_ms': 47.538}"
+    }
+  ],
+  "passed": false,
+  "percentile_method": "linear interpolation",
+  "design": {
+    "load_trials": 5,
+    "requests_per_trial": 200,
+    "load_workers": 4,
+    "sweep_workers": [
+      1,
+      4,
+      16,
+      64
+    ],
+    "safety_trials": 3,
+    "e2e_samples": 5,
+    "e2e_poll_interval_seconds": 0.1,
+    "policies": [
+      "first_come",
+      "fair_share"
+    ],
+    "default_policy": "fair_share",
+    "policy_timeout_seconds": 30,
+    "capacity_stress_policies": [
+      "first_come",
+      "fair_share"
+    ],
+    "fairness_quiet_meters": 10,
+    "fairness_quiet_seconds": 20,
+    "fairness_overload_meters": 200,
+    "fairness_overload_seconds": 25,
+    "fairness_convergence_timeout_seconds": 90,
+    "fairness_tolerance_amps": 3,
+    "expected_runtime_minutes": {
+      "typical": [
+        10,
+        14
+      ],
+      "deadline_bound": 40
+    }
+  },
+  "limitations": [
+    "Sampled state cannot prove absence of transients between polls.",
+    "Trials come from one run on one stack; stdev shows run-to-run spread, not independent samples.",
+    "Decision latency includes both accepted and rejected HTTP responses.",
+    "The first-come hold and the fair-share convergence time are single observations from one run; whether a building hogged depends on request timing (see spike_reproduced).",
+    "No gateway disk persistence, database failover, or physical breaker is evaluated."
+  ],
+  "error": "Command '['docker', 'compose', '--project-directory', 'D:\\\\Dist_FP\\\\Dist_FP', 'exec', '-T', 'postgres', 'psql', '-U', 'ishtirak', '-d', 'ishtirak', '-At', '-v', 'ON_ERROR_STOP=1', '-c', 'SELECT count(*) FROM readings']' timed out after 15 seconds",
+  "meter_config_restore_error": "meter config failed: {'status': 0, 'data': {}, 'error': 'Remote end closed connection without response', 'latency_ms': 42.241}",
+  "policy_restore_error": "deadline exceeded waiting for the fair_share policy to be accepted; last=None",
+  "invariant_sampling": {
+    "overview_samples": 126,
+    "node_samples": 298,
+    "transport_errors": 62,
+    "max_observed_granted_amps": 85,
+    "violations": []
+  },
+  "finished_at": "2026-11-11T12:09:08.805144+00:00"
+}

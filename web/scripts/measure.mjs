@@ -1,4 +1,4 @@
-// Layout measurement for the Switchboard: opens the built app from the local mock and prints the page height and the height of each zone
+// Layout measurement for the console: opens the built app from the local mock and prints the page height and the height of each zone
 // at the given viewports, with the board's min-height switched off so the number is the board's natural height.
 // Usage: node scripts/measure.mjs [state] [WxH ...]   (run `npm run build` first; default 1440x900 healthy)
 import {spawn} from 'node:child_process';

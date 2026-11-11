@@ -1,4 +1,4 @@
-// Dependency-free browser checks using Chrome's local DevTools protocol, for the Switchboard board (see TESTIDS.md).
+// Dependency-free browser checks using Chrome's local DevTools protocol, for the console (see web/TESTIDS.md).
 // Runs against the real stack at BASE_URL (default http://127.0.0.1:8088); set BASE_URL to point it at the local mock instead.
 import {spawn} from 'node:child_process';
 import {mkdir,writeFile} from 'node:fs/promises';
@@ -91,6 +91,7 @@ try{
  const ov=await overview();const upNodes=ov.nodes.filter(n=>n.online).length;
  check('Cluster details lists every coordinator',await evaluate(`document.querySelectorAll('[data-testid="cluster-door-node"]').length===${ov.nodes.length}`));
  check('Cluster details shows exactly one leader and the right reachable count',await evaluate(`document.querySelectorAll('[data-testid="cluster-door-node"][data-role="Leader"]').length===1&&document.querySelector('[data-testid="cluster-fact"][data-fact="reachable"]').dataset.value==='${upNodes} of ${ov.nodes.length}'`));
+ await waitFor(()=>evaluate(`['postgres','majority'].every(k=>{const e=document.querySelector('[data-testid="cluster-fact"][data-fact="'+k+'"]');return e&&e.dataset.value!=='unknown'})`),5000).catch(()=>{}); // the facts arrive with the next frame after the drawer opens
  check('Cluster details states the database, majority, live feed and policy',await evaluate(`['postgres','majority','verified-at','feed','policy','fairness'].every(k=>{const e=document.querySelector('[data-testid="cluster-fact"][data-fact="'+k+'"]');return e&&e.dataset.value!==''})&&document.querySelector('[data-testid="cluster-fact"][data-fact="postgres"]').dataset.value==='Connected'&&document.querySelector('[data-testid="cluster-fact"][data-fact="majority"]').dataset.value==='Verified'`));
  await escape();
  check('Escape closes the Cluster details drawer',await evaluate(`!document.querySelector('[data-testid="cluster-door"]')`));

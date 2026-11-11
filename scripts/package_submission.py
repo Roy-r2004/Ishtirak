@@ -22,8 +22,8 @@ for directory in ('cmd', 'internal', 'web', 'deploy', 'scripts', 'docs'):
             if file.is_symlink() or not file.resolve().is_relative_to(ROOT):
                 raise RuntimeError('Refusing nonlocal source path')
             selected.append(file)
-for name in ('evaluation.json', 'chaos-check.json', 'native-cluster-check.json', 'browser-check.json', 'dashboard-desktop.png', 'dashboard-lab-desktop.png',
-             'dashboard-lab-after-failover.png', 'dashboard-mobile.png', 'verification.txt'):
+for name in ('evaluation.json', 'evaluation-fair-share-partial.json', 'chaos-check.json', 'native-cluster-check.json', 'browser-check.json',
+             'browser-check-failed-runs.json', 'board-desktop.png', 'board-mobile.png', 'board-after-failover.png', 'verification.txt'):
     selected.append(ROOT / 'artifacts' / name)
 secret_pattern = re.compile(rb'(?:apikey_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{30,})')
 for file in selected:

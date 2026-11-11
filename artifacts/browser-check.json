@@ -1,7 +1,16 @@
 {
+  "base": "http://127.0.0.1:8088",
   "checks": [
     {
-      "name": "desktop has three buildings and three coordinators",
+      "name": "desktop has three feeders and three relays",
+      "passed": true
+    },
+    {
+      "name": "main ammeter, peak readout and violation counter are present",
+      "passed": true
+    },
+    {
+      "name": "real mode never shows the Simulated data plate",
       "passed": true
     },
     {
@@ -21,6 +30,10 @@
       "passed": true
     },
     {
+      "name": "focus returns to the button that opened the dialog",
+      "passed": true
+    },
+    {
       "name": "UI changes the real meter simulator to ten",
       "passed": true
     },
@@ -29,15 +42,91 @@
       "passed": true
     },
     {
-      "name": "audit table shows real events",
+      "name": "ledger shows real events",
       "passed": true
     },
     {
-      "name": "resilience lab shows four scenarios and the capacity proof",
+      "name": "free figure is capacity minus reserved",
       "passed": true
     },
     {
-      "name": "resilience lab has no horizontal overflow",
+      "name": "served and curtailed figures are real numbers and curtailed is never negative",
+      "passed": true
+    },
+    {
+      "name": "Full log drawer opens and takes focus",
+      "passed": true
+    },
+    {
+      "name": "Full log lists every event the leader holds, up to 100",
+      "passed": true
+    },
+    {
+      "name": "Full log rows are newest first with all six columns",
+      "passed": true
+    },
+    {
+      "name": "Full log kind filter narrows the rows and the caption counts them",
+      "passed": true
+    },
+    {
+      "name": "Full log search with no match shows no rows",
+      "passed": true
+    },
+    {
+      "name": "Full log offers the Tear off export",
+      "passed": true
+    },
+    {
+      "name": "Escape closes the Full log drawer",
+      "passed": true
+    },
+    {
+      "name": "focus returns to the Full log button",
+      "passed": true
+    },
+    {
+      "name": "Cluster details drawer opens and takes focus",
+      "passed": true
+    },
+    {
+      "name": "Cluster details lists every coordinator",
+      "passed": true
+    },
+    {
+      "name": "Cluster details shows exactly one leader and the right reachable count",
+      "passed": true
+    },
+    {
+      "name": "Cluster details states the database, majority, live feed and policy",
+      "passed": true
+    },
+    {
+      "name": "Escape closes the Cluster details drawer",
+      "passed": true
+    },
+    {
+      "name": "focus returns to the Cluster details button",
+      "passed": true
+    },
+    {
+      "name": "the Chart tab opens the one chart and both Chart controls show it expanded",
+      "passed": true
+    },
+    {
+      "name": "Hide chart returns focus to the Chart tab that opened it",
+      "passed": true
+    },
+    {
+      "name": "the Chart button in the capacity panel opens the same chart and Escape returns focus to it",
+      "passed": true
+    },
+    {
+      "name": "four scenarios and the capacity proof exist",
+      "passed": true
+    },
+    {
+      "name": "overload run and policy switch exist",
       "passed": true
     },
     {
@@ -53,6 +142,10 @@
       "passed": true
     },
     {
+      "name": "violation counter is zero",
+      "passed": true
+    },
+    {
       "name": "observed timeline recorded the leader change",
       "passed": true
     },
@@ -61,7 +154,7 @@
       "passed": true
     },
     {
-      "name": "mobile navigation opens",
+      "name": "mobile still shows three feeders and three relays",
       "passed": true
     },
     {
@@ -70,6 +163,7 @@
     }
   ],
   "runtime_errors": [],
-  "websocket_frames": 19,
+  "websocket_frames": 31,
+  "focus_after_escape": "BUTTON[help-open]",
   "passed": true
 }
