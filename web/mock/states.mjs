@@ -4,7 +4,7 @@ export const CAPACITY = 120
 export const COORD = ['coordinator1', 'coordinator2', 'coordinator3']
 export const IDS = ['hamra', 'mar_mikhael', 'achrafieh']
 export const NAMES = { hamra: 'Hamra Residence', mar_mikhael: 'Mar Mikhael House', achrafieh: 'Achrafieh Gardens' }
-export const PRESET_NAMES = ['healthy', 'hog', 'node-down', 'leader-down', 'stale', 'majority-lost', 'gateway-down', 'violation', 'db-down', 'broker-down']
+export const PRESET_NAMES = ['healthy', 'hog', 'node-down', 'leader-down', 'stale', 'majority-lost', 'majority-expired', 'gateway-down', 'violation', 'db-down', 'broker-down']
 
 const amps = (a, b, c) => ({ hamra: a, mar_mikhael: b, achrafieh: c })
 const shares = (a, b, c) => IDS.map((id, i) => ({ building_id: id, amps: [a, b, c][i] }))
@@ -49,8 +49,9 @@ export function buildState(name, now) {
     case 'leader-down': S.nodes.coordinator1.online = false; S.leaderId = null; S.electionPending = 3000; break
     case 'stale': S.stale = true; break
     case 'majority-lost':
+    case 'majority-expired':
       S.nodes.coordinator2.online = false; S.nodes.coordinator3.online = false; S.leaderId = null
-      S.quorumLostAt = now; S.remainingAtLoss = amps(12000, 12000, 12000)
+      S.quorumLostAt = name === 'majority-expired' ? now - 20000 : now; S.remainingAtLoss = amps(12000, 12000, 12000)
       break
     case 'gateway-down': S.gateways.hamra.online = false; break
     case 'violation': // synthetic: the leader reports 124 A granted against 120 A capacity, to exercise the red limit lamp. Not a real system state.

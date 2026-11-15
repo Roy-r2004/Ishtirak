@@ -3,13 +3,14 @@
 import {spawn} from 'node:child_process';
 import {mkdir,writeFile} from 'node:fs/promises';
 import path from 'node:path';
+import assert from 'node:assert/strict';
 const root=path.resolve(import.meta.dirname,'..'), out=path.join(root,'shots'), profile=path.join(root,'artifacts','chrome-shots');
 await mkdir(out,{recursive:true});await mkdir(profile,{recursive:true});
 const chrome=process.env.CHROME_PATH||'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const mockPort=Number(process.env.MOCK_PORT||8099), cdpPort=9341, base=`http://127.0.0.1:${mockPort}`;
 const args=process.argv.slice(2), only=(args.find(a=>a.startsWith('--only='))||'').slice(7), wanted=args.filter(a=>!a.startsWith('--'));
-const viewports={desktop:{w:1440,h:900,mobile:false,full:false},laptop:{w:1280,h:720,mobile:false,full:true},mobile:{w:390,h:844,mobile:true,full:true}};
-const states=['healthy','hog','node-down','stale','majority-lost','tab-tests','tab-sim','tab-chart','confirm-scenario','confirm-breaker','running','drawer-log','drawer-cluster','drawer-cluster-down','drawer-building','drawer-about','dark','dark-majority-lost'];
+const viewports={desktop:{w:1440,h:900,mobile:false,full:false},compact:{w:1150,h:800,mobile:false,full:true},laptop:{w:1280,h:720,mobile:false,full:true},mobile:{w:390,h:844,mobile:true,full:true}};
+const states=['healthy','hog','node-down','stale','majority-lost','majority-expired','tab-tests','tab-sim','tab-chart','confirm-scenario','confirm-breaker','running','drawer-log','drawer-cluster','drawer-cluster-down','drawer-building','drawer-about','dark','dark-majority-lost'];
 // States that open one of the doors (or the chart recorder tray) on top of a preset.
 const presetFor={stale:'healthy','drawer-cluster-down':'majority-lost','dark-majority-lost':'majority-lost'};
 const opener={'drawer-log':'ledger-open','drawer-cluster':'cluster-open','drawer-cluster-down':'cluster-open','drawer-building':'feeder-open','drawer-about':'help-open','tab-tests':'tab-tests','tab-sim':'tab-sim','tab-chart':'recorder-open-bottom','confirm-scenario':'tab-tests','confirm-breaker':'feeder-breaker','running':'tab-tests'};
@@ -40,7 +41,7 @@ try{
   if(only&&only!==name)continue;
   for(const state of states){
    if(wanted.length&&!wanted.includes(state))continue;
-   await setState(presetFor[state]??(['healthy','hog','node-down','majority-lost'].includes(state)?state:'healthy'));
+   await setState(presetFor[state]??(['healthy','hog','node-down','majority-lost','majority-expired'].includes(state)?state:'healthy'));
    await call('Emulation.setDeviceMetricsOverride',{width:vp.w,height:vp.h,deviceScaleFactor:1,mobile:vp.mobile});
    await call('Page.navigate',{url:base});
    await waitFor(()=>evaluate(`document.querySelectorAll('[data-testid=feeder]').length===3&&document.querySelector('[data-testid=main-ammeter]')?.dataset.selftest==='false'`),30000);
@@ -56,6 +57,16 @@ try{
     await evaluate(`document.querySelector('[data-testid=scenario][data-scenario=leader-failover] [data-testid=scenario-run]').click()`);await sleep(3800);
    }
    const m=await measure(vp.w),info=await evaluate(`(()=>{const a=document.querySelector('[data-testid=main-ammeter]');const n=a.querySelector('.needle');return{reserved:a.dataset.reserved,peak:a.dataset.peak,fresh:a.dataset.fresh,needle:n?.getAttribute('transform')}})()`);
+   if(['healthy','majority-lost','majority-expired','stale'].includes(state)){
+    const status=await evaluate(`(()=>{const q=s=>document.querySelector(s);return{delivery:q('[data-testid=delivery-summary]')?.dataset.delivery,alarm:q('[data-testid=majority-alarm]')?.textContent,served:q('[data-testid=delivery-summary] strong')?.textContent,fairness:q('[data-testid=fairness] dd')?.textContent,feeders:[...document.querySelectorAll('[data-testid=feeder-served]')].map(e=>e.textContent),wires:[...document.querySelectorAll('.feeder .drop')].map(e=>e.dataset.wire),buttons:[...document.querySelectorAll('.breaker-text')].map(e=>e.textContent)}})()`);
+    assert.equal(status.delivery,state==='stale'?'unknown':state==='majority-expired'?'stopped':'usable');
+    assert.equal(status.feeders.length,3);
+    assert(status.buttons.every(t=>t==='Gateway running'));
+    if(state==='majority-expired'){
+     assert.match(status.alarm,/delivery stopped after leases expired/);assert.equal(status.served,'0 A');assert.equal(status.fairness,'n/a');assert(status.wires.every(w=>w==='idle'));assert(status.feeders.every(t=>/^0/.test(t)));
+    }
+    assert(m.scrollW<=vp.w+1,`Horizontal overflow at ${state} ${vp.w}: ${JSON.stringify(m.wide)}`);
+   }
    const file=`${state}-${vp.w}x${vp.h}.png`;await snap(file,!opener[state]&&(vp.full||args.includes('--full')),vp) /* doors and the tray are fixed or scrolled into view: shoot the real viewport, never a stretched one */;
    report.push({file,...m,...info});console.log(file,JSON.stringify({...m,...info}));
   }

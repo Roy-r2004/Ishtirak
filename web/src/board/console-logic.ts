@@ -37,18 +37,19 @@ export function nodeStatus(role: string, stale: boolean): Mark {
 }
 
 export type WireState = 'energised' | 'idle' | 'unknown'
-/** A feeder line is energised when its gateway is up, the data is fresh and amps are reserved for it. */
+/** Wire tone follows usable authorization; stroke width elsewhere still shows ledger reservations. */
 export function wireState(i: { online: boolean; stale: boolean; reserved: number | null }): WireState {
   if (i.stale || i.reserved === null) return 'unknown'
   return i.online && i.reserved > 0 ? 'energised' : 'idle'
 }
 
-export const breakerText = (closed: boolean) => closed ? 'Closed' : 'Open'
+export const breakerText = (closed: boolean) => closed ? 'Gateway running' : 'Gateway stopped'
 
 /** The headline of the vote indicator beside the coordinators. */
 export function voteSummary(i: { stale: boolean; quorum: boolean; reachable: number; total: number }): Mark & { detail: string } {
   if (i.stale) return { label: 'No fresh data', tone: 'warn', detail: 'The majority cannot be confirmed.' }
   if (i.quorum) return { label: 'Majority verified', tone: 'ok', detail: `${i.reachable} of ${i.total} coordinators reachable.` }
+  if (i.reachable >= Math.floor(i.total / 2) + 1) return { label: 'Majority not verified', tone: 'warn', detail: `${i.reachable} of ${i.total} coordinators reachable. Waiting for a verified leader.` }
   return { label: 'No majority', tone: 'fault', detail: `${i.reachable} of ${i.total} coordinators reachable. New grants are paused.` }
 }
 

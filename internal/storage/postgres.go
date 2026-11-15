@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -46,6 +45,17 @@ func (s *Store) Close() {
 	}
 }
 func (s *Store) Connected() bool { return s.connected.Load() }
+
+// probe records connectivity separately from projection/query success.
+func (s *Store) probe(ctx context.Context) error {
+	if s.pool == nil {
+		s.connected.Store(false)
+		return errors.New("postgres unavailable")
+	}
+	err := s.pool.Ping(ctx)
+	s.connected.Store(err == nil)
+	return err
+}
 func (s *Store) Latest() []Reading {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -85,14 +95,16 @@ func (s *Store) Run(ctx context.Context, fsm *ledger.FSM, canExport func() bool)
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			ping, pingCancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+			err := s.probe(ping)
+			pingCancel()
+			if err != nil {
+				continue
+			}
 			op, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
-			err := error(nil)
 			if !initialized {
 				err = s.ensure(op)
 				initialized = err == nil
-			}
-			if err == nil && s.pool != nil {
-				err = s.pool.Ping(op)
 			}
 			if err == nil && s.pool != nil && canExport != nil && canExport() {
 				// Only the observed leader projects committed events. A leadership
@@ -120,11 +132,13 @@ func (s *Store) Run(ctx context.Context, fsm *ledger.FSM, canExport func() bool)
 					}
 				}
 			}
-			if err == nil && s.pool != nil {
-				err = s.refresh(op)
-			}
-			s.connected.Store(err == nil && s.pool != nil)
 			cancel()
+			if initialized {
+				// Exporting an audit batch must not consume the refresh budget.
+				refresh, refreshCancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+				_ = s.refresh(refresh) // Keep the last complete cache on query failure.
+				refreshCancel()
+			}
 		}
 	}
 }
@@ -148,23 +162,40 @@ func (s *Store) InsertReadings(ctx context.Context, a []Reading) error {
 	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		s.connected.Store(false)
 		return err
 	}
 	defer tx.Rollback(ctx)
 	for _, r := range a {
 		_, err = tx.Exec(ctx, `INSERT INTO readings(reading_id,building_id,meter_id,amps,observed_at) VALUES($1,$2,$3,$4,$5) ON CONFLICT(reading_id) DO NOTHING`, r.ReadingID, r.BuildingID, r.MeterID, r.Amps, r.ObservedAt)
 		if err != nil {
-			s.connected.Store(false)
 			return err
 		}
 	}
-	err = tx.Commit(ctx)
-	s.connected.Store(err == nil)
-	return err
+	return tx.Commit(ctx)
 }
+
+// Seek between distinct meter keys rather than scanning every historical row.
+// The existing (building_id,meter_id,observed_at DESC) index supports both seeks.
+// The counter preserves the previous deterministic first-1000-meter limit.
+const latestReadingsSQL = `WITH RECURSIVE meter_keys AS (
+ (SELECT building_id,meter_id,1 AS n FROM readings ORDER BY building_id,meter_id LIMIT 1)
+ UNION ALL
+ SELECT r.building_id,r.meter_id,k.n+1 FROM meter_keys k
+ CROSS JOIN LATERAL (
+  SELECT building_id,meter_id FROM readings
+  WHERE (building_id,meter_id)>(k.building_id,k.meter_id)
+  ORDER BY building_id,meter_id LIMIT 1
+ ) r WHERE k.n<1000
+)
+SELECT r.reading_id,r.building_id,r.meter_id,r.amps,r.observed_at FROM meter_keys k
+CROSS JOIN LATERAL (
+ SELECT reading_id,building_id,meter_id,amps,observed_at FROM readings
+ WHERE building_id=k.building_id AND meter_id=k.meter_id
+ ORDER BY observed_at DESC,reading_id DESC LIMIT 1
+) r ORDER BY k.building_id,k.meter_id`
+
 func (s *Store) refresh(ctx context.Context) error {
-	rows, err := s.pool.Query(ctx, `SELECT reading_id,building_id,meter_id,amps,observed_at FROM (SELECT DISTINCT ON(building_id,meter_id) reading_id,building_id,meter_id,amps,observed_at FROM readings ORDER BY building_id,meter_id,observed_at DESC,reading_id DESC) latest LIMIT 1000`)
+	rows, err := s.pool.Query(ctx, latestReadingsSQL)
 	if err != nil {
 		return err
 	}
@@ -180,12 +211,6 @@ func (s *Store) refresh(ctx context.Context) error {
 	if err = rows.Err(); err != nil {
 		return err
 	}
-	sort.Slice(a, func(i, j int) bool {
-		if a[i].BuildingID == a[j].BuildingID {
-			return a[i].MeterID < a[j].MeterID
-		}
-		return a[i].BuildingID < a[j].BuildingID
-	})
 	s.mu.Lock()
 	s.latest = a
 	s.mu.Unlock()

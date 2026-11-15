@@ -4,6 +4,7 @@ import { shareRows } from '../lab/fairness'
 import { Glyph, Status, TwoStep } from './controls'
 import { CLUSTER_SIZE, breakerText, clusterGeometry, feederStatus, lineWeight, nodeStatus, voteSummary, wireState } from './console-logic'
 import { describeTiers, tierSegments, tiersOf } from './tiers'
+import { deliverySummary, gatewayDelivery } from './delivery'
 
 const wire = (amps: number | null, capacity: number): CSSProperties => ({ ['--w' as string]: `${lineWeight(amps, capacity)}px` })
 
@@ -38,14 +39,15 @@ function Feeder({ grid, id, capacity, enabled, onOpen }: { grid: Grid; id: strin
   const status = feederStatus({ online: b.online, stale: grid.stale, state: d?.state })
   const reserved = c ? lease?.amps ?? 0 : null, fair = fairOn && row?.fair != null ? row.fair : null
   const name = names[id] ?? id, district = districts[id] ?? id
-  const wireTone = wireState({ online: b.online, stale: grid.stale, reserved })
+  const delivery = gatewayDelivery(b, !grid.stale && !!grid.data)
+  const wireTone = wireState({ online: b.online, stale: delivery === 'unknown', reserved: delivery === 'usable' ? d!.granted_amps : 0 })
   const lock = !enabled ? 'Controls are switched off.' : grid.busy ? 'Another action is in progress.' : ''
   const busy = grid.busy.endsWith(service)
   return <article className="feeder" data-testid="feeder" data-building={id} data-state={status.label} data-stale={grid.stale} data-online={b.online}>
     <div className="drop" data-wire={wireTone} style={wire(reserved, capacity)}><span className="dim mono">{reserved === null ? '—' : `${num(reserved)} A`}</span></div>
     <div className="breaker-slot">
       <TwoStep className="breaker" question="Stop gateway?" confirm={b.online} disabled={!!lock} reason={lock || (b.online ? 'Stop the gateway' : 'Start the gateway')} armTestId="feeder-breaker" confirmTestId="feeder-breaker-confirm" cancelTestId="feeder-breaker-cancel" promptClass="prompt-pop"
-        armProps={{ role: 'switch', 'aria-checked': b.online, 'aria-label': `Gateway breaker, ${district}`, 'data-busy': busy }} onConfirm={() => grid.act(service, b.online ? 'stop' : 'start')}>
+        armProps={{ role: 'switch', 'aria-checked': b.online, 'aria-label': `Gateway process, ${district}`, 'data-busy': busy }} onConfirm={() => grid.act(service, b.online ? 'stop' : 'start')}>
         <BreakerSymbol closed={b.online} /><span className="breaker-text">{breakerText(b.online)}</span>
       </TwoStep>
     </div>
@@ -53,17 +55,18 @@ function Feeder({ grid, id, capacity, enabled, onOpen }: { grid: Grid; id: strin
     <div className="meter-block">
       <div className="meter-head">
         <button type="button" className="name-link" data-testid="feeder-open" aria-label={`Open details for ${name}`} onClick={e => onOpen(id, e.currentTarget)}>{name}</button>
-        <Status tone={status.tone} label={status.label} testId="feeder-state" />
+        <Status tone={status.tone} label={status.label === 'Lease expired' ? 'Lease expired — no service' : status.label} testId="feeder-state" />
       </div>
       <Bar capacity={capacity} demand={b.online && d ? d.demand_amps : null} fair={fair} tiers={tiers} dim={grid.stale} />
       <div className="bar-ends mono" aria-hidden="true"><span>0</span><span>{num(capacity)} A</span></div>
       <p className="sr">{`${district} feeder. Demand ${b.online ? `${num(d?.demand_amps, 1)} amps` : 'unknown'}. Reserved ${reserved === null ? 'unknown' : `${num(reserved)} amps`}.${fair !== null ? ` Fair share ${num(fair, 1)} amps.` : ''} ${describeTiers(tiers)}`}</p>
       <dl className="readings">
         <div><dt><i className="key key-demand" aria-hidden="true" />Demand</dt><dd className="mono" data-testid="feeder-demand">{b.online ? num(d?.demand_amps, 1) : '—'}<small> A</small></dd></div>
-        <div><dt><i className="key key-reserved" aria-hidden="true" />Reserved</dt><dd className="mono" data-testid="feeder-reserved">{reserved === null ? '—' : num(reserved)}<small> A</small></dd></div>
-        {fairOn ? <div><dt><i className="key key-fair" aria-hidden="true" />Fair share</dt><dd className="mono">{fair === null ? '—' : num(fair, 1)}<small> A</small></dd></div> : <div><dt>Served</dt><dd className="mono">{b.online ? num(d?.served_amps, 1) : '—'}<small> A</small></dd></div>}
+        <div title="Capacity still reserved in the Raft ledger, not current delivery."><dt><i className="key key-reserved" aria-hidden="true" />Held in ledger</dt><dd className="mono" data-testid="feeder-reserved">{reserved === null ? '—' : num(reserved)}<small> A</small></dd></div>
+        <div><dt>Served</dt><dd className="mono" data-testid="feeder-served">{b.online && !grid.stale ? num(d?.served_amps, 1) : '—'}<small> A</small></dd></div>
+        {fairOn && <div><dt><i className="key key-fair" aria-hidden="true" />Fair share</dt><dd className="mono">{fair === null ? '—' : num(fair, 1)}<small> A</small></dd></div>}
       </dl>
-      <p className="tier-line" data-testid="tier-note">{tiers.length > 1 ? <>Steps down to <b className="mono">{num(tiers[tiers.length - 1].amps)} A</b></> : <span aria-hidden="true">&nbsp;</span>}</p>
+      <p className="tier-line" data-testid="tier-note">{tiers.length > 1 ? grid.stale ? 'Reduction status unknown' : !grid.quorum ? 'Reduction waiting for majority' : <>Steps down to <b className="mono">{num(tiers[tiers.length - 1].amps)} A</b></> : delivery === 'stopped' && (reserved ?? 0) > 0 ? grid.quorum ? 'Capacity held until safe reclamation' : 'Capacity release waiting for majority' : <span aria-hidden="true">&nbsp;</span>}</p>
       <dl className="facts">
         <div className={remaining > 0 && remaining < 2000 ? 'low' : ''}><dt>Lease</dt><dd className="mono">{b.online ? `${(remaining / 1000).toFixed(1)} s` : '—'}</dd></div>
         <div><dt>Pending</dt><dd className="mono">{b.online ? num(d?.pending_readings) : '—'}</dd></div>
@@ -120,18 +123,19 @@ function Cluster({ grid, onOpenCluster }: { grid: Grid; onOpenCluster: (trigger:
 
 export function Diagram({ grid, enabled, onOpenBuilding, onOpenCluster }: { grid: Grid; enabled: boolean; onOpenBuilding: (id: string, trigger: HTMLElement) => void; onOpenCluster: (trigger: HTMLElement) => void }) {
   const c = grid.cluster, capacity = c?.capacity_amps ?? 120, total = c ? c.granted_amps : null, uid = useId().replace(/:/g, '')
-  const busWire = wireState({ online: true, stale: grid.stale, reserved: total })
+  const delivery = deliverySummary({ fresh: !grid.stale && !!grid.data, quorum: grid.quorum, reachable: grid.nodes.filter(n => n.online).length, totalNodes: grid.nodes.length, buildings: grid.buildings })
+  const busWire = wireState({ online: true, stale: delivery.state === 'unknown', reserved: delivery.state === 'usable' ? 1 : 0 })
   return <section className="panel diagram" aria-labelledby={`${uid}-t`} data-testid="diagram">
-    <header className="panel-head"><h2 id={`${uid}-t`}>Buildings</h2><span className="muted">Single-line diagram. Line weight shows reserved amps. Observed {grid.lastSeen ? time(grid.lastSeen) : 'never'}.</span></header>
+    <header className="panel-head"><h2 id={`${uid}-t`}>Buildings</h2><span className="muted">Line width shows held capacity; colour follows valid grants. Observed {grid.lastSeen ? time(grid.lastSeen) : 'never'}.</span></header>
     <div className="diagram-body">
-      <div className="sld">
+      <div className="sld" data-wire={busWire}>
         <div className="source">
           <div className="source-sym"><GeneratorSymbol /><div className="source-text"><strong>Generator</strong><span className="mono">{num(capacity)} A rating</span></div></div>
-          <div className="drop source-drop" data-wire={busWire} style={wire(total, capacity)}><span className="dim mono">{total === null ? '—' : `${num(total)} A reserved`}</span></div>
+          <div className="drop source-drop" data-wire={busWire} style={wire(total, capacity)}><span className="dim mono">{total === null ? '—' : `${num(total)} A held in ledger`}</span></div>
         </div>
         <div className="bus" data-wire={busWire} style={wire(total, capacity)} aria-hidden="true" />
         <div className="feeders" data-testid="feeders">{grid.buildings.map(b => <Feeder key={b.id} grid={grid} id={b.id} capacity={capacity} enabled={enabled} onOpen={onOpenBuilding} />)}</div>
-        <p className="legend" aria-hidden="true"><svg className="sym sym-breaker" width="14" height="14" viewBox="0 0 18 18"><rect x="2" y="2" width="14" height="14" className="closed" /></svg> closed <svg className="sym sym-breaker" width="14" height="14" viewBox="0 0 18 18"><rect x="2" y="2" width="14" height="14" className="open" /></svg> open <i className="key key-demand" /> demand <i className="key key-reserved" /> reserved <i className="key key-fair" /> fair share</p>
+        <p className="legend" aria-hidden="true"><svg className="sym sym-breaker" width="14" height="14" viewBox="0 0 18 18"><rect x="2" y="2" width="14" height="14" className="closed" /></svg> gateway running <svg className="sym sym-breaker" width="14" height="14" viewBox="0 0 18 18"><rect x="2" y="2" width="14" height="14" className="open" /></svg> stopped <i className="key key-demand" /> demand <i className="key key-reserved" /> held in ledger <i className="key key-fair" /> fair share</p>
       </div>
       <Cluster grid={grid} onOpenCluster={onOpenCluster} />
     </div>

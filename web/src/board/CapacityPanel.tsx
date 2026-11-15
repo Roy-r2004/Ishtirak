@@ -6,6 +6,7 @@ import { Status } from './controls'
 import { arcPath, buildTicks, describeReading, pegged, polar, scaleStop, valueToAngle } from './dial'
 import { amps, capacityFigures, coverage } from './readouts'
 import { useReducedMotion, useSpring } from './use-motion'
+import { deliverySummary } from './delivery'
 
 /** Flat gauge drawing space: a half circle with its hub at the bottom centre. Drawn at this size, so its text is never scaled. */
 const W = 300, H = 158, CX = 150, CY = 144, R = 104
@@ -26,7 +27,9 @@ export function CapacityPanel({ grid, lab, chartOpen, onOpenChart }: { grid: Gri
 
   const ticks = useMemo(() => buildTicks(capacity, 10, 10, 20), [capacity])
   const limitAngle = valueToAngle(capacity, capacity), a0 = valueToAngle(0, capacity), a1 = valueToAngle(stop, capacity)
-  const figures = capacityFigures({ fresh, capacity: c?.capacity_amps, reserved: c?.granted_amps, buildings: grid.buildings }), partial = coverage(figures)
+  const figures = capacityFigures({ fresh: !grid.stale && !!grid.data, capacity: fresh ? c?.capacity_amps : undefined, reserved: fresh ? c?.granted_amps : undefined, buildings: grid.buildings }), partial = coverage(figures)
+  const delivery = deliverySummary({ fresh: !grid.stale && !!grid.data, quorum: grid.quorum, reachable: grid.nodes.filter(n => n.online).length, totalNodes: grid.nodes.length, buildings: grid.buildings })
+  const fairnessAvailable = fresh && delivery.state === 'usable'
   const words = describeReading({ value: shown, capacity: fresh || shown !== null ? capacity : null, peak: peakValue, fresh, violations: lab.peak.violations })
   const parked = !fresh
   const noVio = lab.peak.violations === 0
@@ -37,6 +40,10 @@ export function CapacityPanel({ grid, lab, chartOpen, onOpenChart }: { grid: Gri
       : `Violation observed: ${num(lab.peak.violations)} of ${num(lab.peak.samples)} fresh samples passed ${num(lab.peak.capacity ?? capacity)} A.`
   return <section className="panel capacity" aria-labelledby={`${uid}-t`} data-testid="main-ammeter" data-fresh={fresh} data-selftest="false" data-reserved={shown ?? ''} data-capacity={capacity} data-peak={peakValue ?? ''} data-violations={lab.peak.violations}>
     <header className="panel-head"><h2 id={`${uid}-t`}>Capacity</h2><button type="button" className="btn btn-quiet" aria-expanded={chartOpen} aria-controls="chart-panel" data-testid="recorder-open" onClick={e => onOpenChart(e.currentTarget)}>Chart</button></header>
+    <div className="delivery-readout" data-testid="delivery-summary" data-delivery={delivery.state}>
+      <div><span>{delivery.complete ? 'Currently served' : 'Reported served'}</span><strong className="mono">{amps(figures.served)}</strong></div>
+      <p>{delivery.serviceLabel}{!delivery.complete && !grid.stale ? ` (${delivery.reporting} of ${delivery.total} gateways reporting)` : ''}</p>
+    </div>
     <div className="capacity-top">
       <div className="gauge" role="meter" aria-label="Reserved amps against generator capacity" aria-valuemin={0} aria-valuemax={capacity} aria-valuenow={shown ?? undefined} aria-valuetext={words}>
         <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} aria-hidden="true" focusable="false" data-parked={parked}>
@@ -53,14 +60,15 @@ export function CapacityPanel({ grid, lab, chartOpen, onOpenChart }: { grid: Gri
         {parked && <p className="gauge-stale" role="status">No fresh data</p>}
       </div>
       <div className="capacity-read">
-        <div className="reading" data-testid="reading"><span className="reading-value mono">{fresh ? num(shown ?? undefined) : '—'}{fresh && <small> A</small>}</span><span className="reading-unit">{fresh ? `of ${num(capacity)} A reserved` : 'No fresh data'}</span>{!fresh && shown !== null && <span className="reading-last mono">Last {num(shown)} A{grid.lastSeen ? ` at ${time(grid.lastSeen)}` : ''}</span>}</div>
+        <div className="reading" data-testid="reading"><span className="reading-value mono">{fresh ? num(shown ?? undefined) : '—'}{fresh && <small> A</small>}</span><span className="reading-unit">{fresh ? `of ${num(capacity)} A held in ledger` : 'No fresh data'}</span>{!fresh && shown !== null && <span className="reading-last mono">Last {num(shown)} A{grid.lastSeen ? ` at ${time(grid.lastSeen)}` : ''}</span>}</div>
         <dl className="kv">
           <div data-testid="peak-readout"><dt>Peak</dt><dd className="mono">{peakValue === null ? '—' : `${num(peakValue)} A`}<span className="sr"> since the console opened</span></dd></div>
           <div data-testid="violations" data-count={lab.peak.violations}><dt>Violations</dt><dd className="mono" data-bad={lab.peak.violations > 0}>{lab.peak.samples ? num(lab.peak.violations) : '—'}</dd></div>
-          <div data-testid="fairness" title="How evenly reserved amps are spread across the buildings that want power; 100% means equal shares."><dt>Fairness</dt><dd className="mono">{fresh ? percent(score) : '—'}</dd></div>
+          <div data-testid="fairness" title={fairnessAvailable ? 'Equality of ledger reservations, not a delivery guarantee; 100% means equal reserved shares.' : delivery.state === 'stopped' ? 'Unavailable while delivery is stopped.' : 'Unavailable without complete fresh gateway observations.'}><dt>Reservation fairness</dt><dd className="mono">{fairnessAvailable ? percent(score) : 'n/a'}</dd></div>
         </dl>
       </div>
     </div>
+    <p className="reservation-note" data-testid="reservation-note">{grid.stale ? 'Ledger data is stale; current delivery and reclamation cannot be confirmed.' : delivery.heldNote}{delivery.state === 'stopped' ? ' Fairness is unavailable while delivery is stopped.' : ''}</p>
     <dl className="capacity-strip" aria-label="Capacity" data-testid="capacity-strip" data-fresh={fresh}>
       <div data-testid="free-readout" data-value={figures.free ?? ''}><dt>Free</dt><dd className="mono">{amps(figures.free)}</dd></div>
       <div data-testid="served-readout" data-value={figures.served ?? ''}><dt>Served{partial && <small aria-hidden="true">{figures.reporting} of {figures.total}</small>}</dt><dd className="mono">{amps(figures.served)}{partial && <span className="sr"> ({partial})</span>}</dd></div>
@@ -69,7 +77,7 @@ export function CapacityPanel({ grid, lab, chartOpen, onOpenChart }: { grid: Gri
     <p className="sr" data-testid="ammeter-words">{words}{pegged(shown ?? 0, capacity) ? ' The reading is beyond the end of the scale.' : ''}</p>
     <div className="status-row" role="group" aria-label="Data and limit status">
       <Status tone={fresh ? 'ok' : 'warn'} label={fresh ? 'Fresh data' : 'No fresh data'} testId="lamp-stale" lit={!fresh} />
-      <Status tone={fresh && !grid.quorum ? 'warn' : 'ok'} label={fresh && !grid.quorum ? 'Grants paused' : 'Grants active'} testId="lamp-paused" lit={fresh && !grid.quorum} />
+      <Status tone={!fresh || !grid.quorum ? 'warn' : 'ok'} label={!fresh ? 'Grant status unknown' : !grid.quorum ? 'Grants paused' : 'Grants active'} testId="lamp-paused" lit={!fresh || !grid.quorum} />
       <Status tone={lab.peak.violations > 0 ? 'fault' : 'ok'} label={lab.peak.violations > 0 ? `Limit exceeded, ${num(lab.peak.violations)} samples` : 'Within limit'} testId="lamp-limit" lit={lab.peak.violations > 0} />
     </div>
     <p className="proof" data-testid="capacity-proof" data-state={lab.peak.samples === 0 ? 'none' : noVio ? 'safe' : 'violated'}>{proofText}<span className="sr"> This is evidence from sampled observations, not proof for unsampled instants.</span></p>

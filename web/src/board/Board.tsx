@@ -15,6 +15,7 @@ import { Glyph } from './controls'
 import { describeNotice } from './copy'
 import { readTheme, saveTheme, themeAttribute, type Theme } from './console-logic'
 import { useLab } from './use-lab'
+import { deliverySummary } from './delivery'
 
 /** The whole product: one operations console. The single-line diagram is the hero; everything else is a panel, a dock tab or a drawer. */
 export function Board() {
@@ -23,6 +24,7 @@ export function Board() {
   const [tab, setTab] = useState<DockTab>('log'), [theme, setTheme] = useState<Theme>(() => readTheme(typeof localStorage === 'undefined' ? null : localStorage))
   const returnTo = useRef<HTMLElement | null>(null), aboutRef = useRef<HTMLButtonElement>(null), chartTrigger = useRef<HTMLElement | null>(null), previousTab = useRef<DockTab>('log')
   const enabled = !!grid.data?.demo_enabled, chartOpen = tab === 'chart', reachable = grid.nodes.filter(n => n.online).length
+  const delivery = deliverySummary({ fresh: !grid.stale && !!grid.data, quorum: grid.quorum, reachable, totalNodes: grid.nodes.length, buildings: grid.buildings })
   // The trigger is remembered explicitly: Safari does not focus a button on click, so document.activeElement would be the body.
   const remember = (trigger: HTMLElement | null) => { returnTo.current = trigger }
   const restore = () => returnTo.current?.focus()
@@ -40,7 +42,7 @@ export function Board() {
   return <div className="console">
     <a href="#board" className="skip-link">Skip to the console</a>
     <TopBar grid={grid} lab={lab} demo={demo} aboutRef={aboutRef} onAbout={() => { remember(aboutRef.current); setAbout(true) }} />
-    {!grid.quorum && !grid.stale && <div className="alarm" role="alert" data-testid="majority-alarm"><Glyph tone="fault" /><strong>New grants are paused.</strong><span>Only {reachable} of {grid.nodes.length} coordinators can be reached; a majority needs 2. Existing leases stop serving at their safe deadlines. Start a stopped coordinator to resume.</span></div>}
+    {delivery.paused && <div className="alarm" role="alert" data-testid="majority-alarm" data-delivery={delivery.state}><Glyph tone="fault" /><div><strong>{delivery.title}</strong><p>{delivery.detail} {delivery.recovery}</p></div></div>}
     <main id="board" tabIndex={-1} className="main" data-testid="board" data-lamptest="false" data-demo={demo} data-tray={chartOpen}>
       <Diagram grid={grid} enabled={enabled} onOpenBuilding={(id, trigger) => { remember(trigger); setBuilding(id) }} onOpenCluster={trigger => { remember(trigger); setClusterDrawer(true) }} />
       <div className="side">

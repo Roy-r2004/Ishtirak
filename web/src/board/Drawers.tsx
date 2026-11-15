@@ -94,9 +94,9 @@ export function AboutDrawer({ open, onClose, restore, demo, theme, onTheme }: { 
       <h3>Reading the console</h3>
       <ul>
         <li>The diagram shows the generator, the bus and the three buildings. Line weight and the label beside each line give the amps reserved for it.</li>
-        <li>A filled breaker symbol is closed (the gateway is running); an empty one is open. The breaker is also the gateway on and off control.</li>
+        <li>A filled square means the gateway process is running; an empty one means it is stopped. This control starts or stops the gateway. A running gateway still needs a valid grant to serve demand.</li>
         <li>The stepped bar in each building shows its reservation by tier. It shortens as older tiers expire and the reservation falls to current demand.</li>
-        <li>The gauge shows the total reserved in the leader's ledger. The marker is the highest fresh reading since the console opened.</li>
+        <li>Currently served is simulated delivery reported by gateways. The gauge shows capacity held in the ledger, which may remain above zero after service stops. Releasing it needs a majority and a committed safe expiry. The marker is the highest fresh reservation since the console opened.</li>
         <li>Every status has a symbol and a word. If data stops arriving the gauge parks and says so.</li>
         <li>The allocation log lists committed decisions, newest first. Export saves them as JSON.</li>
       </ul>

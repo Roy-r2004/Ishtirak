@@ -49,8 +49,8 @@ describe('status marks always carry words', () => {
     expect(wireState({ online: true, stale: false, reserved: null })).toBe('unknown')
   })
   it('names the breaker position', () => {
-    expect(breakerText(true)).toBe('Closed')
-    expect(breakerText(false)).toBe('Open')
+    expect(breakerText(true)).toBe('Gateway running')
+    expect(breakerText(false)).toBe('Gateway stopped')
   })
 })
 
