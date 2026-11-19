@@ -28,7 +28,7 @@ Only the dashboard is published to the host, bound to loopback. No host Go insta
 | Process group | Responsibility | Communication |
 | --- | --- | --- |
 | Go meter simulators + Mosquitto | Synthetic household consumption, unique readings | MQTT QoS 1 |
-| Three Go building gateways | Building partition, aggregation, leases, simulated load limiting | MQTT and HTTP/JSON |
+| Three Go building gateways, each with a warm standby | Building partition, aggregation, leases, simulated load limiting; the standby takes the building over if its gateway drops | MQTT and HTTP/JSON |
 | Three persistent Go coordinators | Leader election, consensus, capacity state machine | HashiCorp Raft TCP and HTTP/JSON |
 | PostgreSQL | Durable readings and idempotent append-only event projection | SQL |
 | React dashboard | Live observations, topology, audit, fault controls | HTTP and WebSocket |
@@ -42,7 +42,7 @@ The quickest tour is the dock's **Failure tests** tab: four guided scenarios (le
 1. Observe the Capacity panel (reserved against 120 A, free, served, curtailed) and the three reporting buildings.
 2. In the **Coordinators** table, stop the current leader (Stop, then Confirm). Watch a replacement leader appear, then start the old node again.
 3. Stop two coordinators. The console reports lost quorum, new grants stop, and gateways stop serving when their safe local deadlines expire. Start both nodes again.
-4. On a building, open its breaker (the breaker symbol, then Confirm) to simulate a gateway failure. Its committed budget remains reserved conservatively before reclamation. Close it again; the gateway uses a fresh session and waits for safe admission.
+4. On a building, open its breaker (the breaker symbol, then Confirm) to stop its primary gateway. The building shows "Served by standby" once the gateway's lease lapses, about 12 to 15 seconds later, and the capacity proof stays at zero violations. Close the breaker again; the restarted gateway comes back as the standby and does not take the building back. (The Failure tests tab's Gateway crash runs the same steps and restores everything.)
 5. In the **Simulation** tab, stop PostgreSQL. Raft continues capacity decisions; audit entries catch up when the database returns. Buffered readings can be lost if their gateway crashes.
 6. Set 10, 50, or 200 meters and vary the demand multiplier. The console separates requested demand, served demand, and reserved capacity; excess demand is curtailed rather than treated as extra authorized capacity.
 7. Run the **Overload test** under each admission policy (the policy switch is in the top bar). Under first come one building can keep most of the generator; under fair sharing the buildings converge on equal shares.
@@ -57,7 +57,7 @@ The local demo controller holds the Docker socket and only permits start/stop/re
 
 - Generator capacity is initialized once by a replicated `init_capacity` command, not independently decided during replay by each node. The first committed value persists through snapshots and leadership changes.
 - Requests have unique IDs and canonical payload hashes. Reusing an ID with changed content is rejected. Results are retained for idempotent replay, including after snapshots.
-- A gateway has a fresh boot-session identifier. Another session cannot take over a building while its old lease remains reserved.
+- A gateway has a fresh boot-session identifier. Another session cannot take over a building while its old lease remains reserved. This is what makes the standby gateway safe: it is refused while the primary's lease is alive and is granted the building only after the committed expiry (see [docs/GATEWAY_STANDBY.md](docs/GATEWAY_STANDBY.md)).
 - Grants and renewals receive unique committed-log-index versions. Expiration commands compare the building, version, and proposing Raft term; a stale expiry cannot delete a newer lease.
 - Lease duration is fixed at **12 seconds** across the protocol. A gateway uses a grant only until **its original request-send time + 10 seconds**, retaining that original time across retries. Late or mismatched responses cannot extend it.
 - The coordinator starts a monotonic **12-second hold** when it first observes a lease version. Every leadership-term transition conservatively resets inherited holds. Clock offsets and wall-clock adjustments do not decide expiry.
@@ -134,7 +134,7 @@ compose.yaml          complete local environment
 
 ## Deliberate limits
 
-No physical relays, billing engine, authentication product, replicated PostgreSQL, standby gateway, Kafka, Kubernetes, or external AI is added. Readings published during gateway downtime may be lost. Gateway queues are bounded and report drops. Request history and audit outbox are retained for this bounded prototype and grow over time; production retention requires a separate safety design. Fair sharing has no priority classes (every building is equal) and building ids are not authenticated. UI status and quorum checks are timestamped observations, not a linearizable physical-world measurement.
+No physical relays, billing engine, authentication product, replicated PostgreSQL, Kafka, Kubernetes, or external AI is added. Each building's gateway has a warm standby, but the broker, the meters and PostgreSQL are single instances, a takeover leaves the building without service for about 12 to 15 seconds, and a building whose primary and standby both fail has no service. Readings can still be lost if both gateways or the database fail. Gateway queues are bounded and report drops. Request history and audit outbox are retained for this bounded prototype and grow over time; production retention requires a separate safety design. Fair sharing has no priority classes (every building is equal) and building ids are not authenticated. UI status and quorum checks are timestamped observations, not a linearizable physical-world measurement.
 
 Do not reset only one side of the persistent system: resetting Raft history while retaining SQL audit IDs invalidates correspondence. For a fresh demo, stop all gateways and reset the entire Compose project's volumes together, only when data deletion is intended.
 
