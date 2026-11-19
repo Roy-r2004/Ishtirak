@@ -6,9 +6,10 @@ Requires the local dashboard/control API, Python 3.10+, and Docker Compose CLI.
 Uses only Python's standard library.
 
 Expected runtime (estimate, not measured here): a healthy run takes roughly
-10-14 minutes; the sum of all phase deadlines bounds an unhealthy run to about
-40 minutes (see EXPECTED_RUNTIME_MINUTES). Deadlines: initial readiness <=120s;
-gateway reclaim <=35s (x3 trials); failover <=45s (x3 trials); majority-loss
+11-16 minutes; the sum of all phase deadlines bounds an unhealthy run to about
+46 minutes (see EXPECTED_RUNTIME_MINUTES). Deadlines: initial readiness <=120s;
+gateway reclaim <=35s (x3 trials); standby takeover <=45s plus <=30s to find a
+building, <=20s serving check and <=10s rejoin (x3 trials); failover <=45s (x3 trials); majority-loss
 hold 13s; PostgreSQL recovery <=45s; capacity reclaim <=35s (x2, one per
 admission policy); each load settles
 10s, runs 5 measured trials of 200 requests, and observes MQTT for 5s; the
@@ -35,8 +36,25 @@ every building's reservation is within 3 A of the leader's `fair_shares` with th
 total <= capacity. The policy is returned to `fair_share` after each of those
 phases and again in the final restore().
 
-Repeated trials: each load runs 5 trials, leader failover and gateway
-reclamation run 3 trials each. Every trial is recorded under "trials" and
+Gateway pairs: every building has a primary gateway (gateway-hamra, ...) and a standby
+(gateway-hamra-standby, ...) with the same code and BUILDING_ID. The ledger refuses a second
+session on a building while its lease is held (building_session_active), so the standby idles
+(overview `standbys`, gateway status `role`: serving | standby | waiting) until the lease lapses
+about 12 s after the serving gateway stops renewing, then it is granted the building. A restarted
+gateway becomes the standby; it does not take the building back. Consequences here:
+gateway_crash_and_reclamation stops the crashed building's standby first (always restarted
+afterwards, `standby_stopped: true`) so that it still measures the coordinator's lease
+reclamation; gateway_standby_takeover (right after it) stops the gateway serving a leased
+building and records `takeover_seconds` (stop returned -> the leader lists a lease for the
+building under a new session), checks the standby reports role "serving" with growing
+readings_total, restarts the stopped gateway and checks it returns as "standby" without taking
+the building back; capacity_stress_and_idempotency stops and restarts the standbys with the
+primaries; the sampler holds standbys to the same served-amps rule as the primaries; totals use
+the serving gateway of each building. A takeover leaves the standby serving until
+capacity_stress_and_idempotency restarts the primaries ahead of the standbys.
+
+Repeated trials: each load runs 5 trials, leader failover, gateway
+reclamation and standby takeover run 3 trials each. Every trial is recorded under "trials" and
 summarised (n, mean, sample stdev, min, max) under "summary". The existing
 top-level fields are taken from the MEDIAN trial, named in "headline_basis".
 Trials come from one run on one stack, so the spread describes run-to-run
@@ -78,8 +96,11 @@ import uuid
 
 COORDINATORS = ("coordinator1", "coordinator2", "coordinator3")
 GATEWAYS = ("gateway-hamra", "gateway-mar-mikhael", "gateway-achrafieh")
+GATEWAY_STANDBYS = ("gateway-hamra-standby", "gateway-mar-mikhael-standby", "gateway-achrafieh-standby")
 BUILDINGS = ("hamra", "mar_mikhael", "achrafieh")
-SERVICES = ("postgres", "mosquitto", *COORDINATORS, *GATEWAYS, "meters")
+SERVICES = ("postgres", "mosquitto", *COORDINATORS, *GATEWAYS, *GATEWAY_STANDBYS, "meters")
+PRIMARY_SERVICE = dict(zip(BUILDINGS, GATEWAYS))
+STANDBY_SERVICE = dict(zip(BUILDINGS, GATEWAY_STANDBYS))
 
 PERCENTILE_METHOD = "linear interpolation"
 LOAD_TRIALS = 5                    # measured trials per load (settled once per load)
@@ -114,8 +135,13 @@ FAIRNESS_CONVERGENCE_TIMEOUT_SECONDS = 90   # hold decays after one 12 s hold; s
 FAIRNESS_TOLERANCE_AMPS = 3                 # "reached" = every reservation within this of its fair share
 FAIRNESS_POLL_SECONDS = 0.5
 FAIRNESS_HOG_MIN_AMPS = RECOVERY_SPIKE_MIN_AMPS  # a first-come reservation this large = one building hogging
+STANDBY_READY_TIMEOUT_SECONDS = 30      # a leased building whose other gateway is idle ("standby") must be found
+STANDBY_TAKEOVER_TIMEOUT_SECONDS = 45   # 12 s coordinator hold + 2 s standby retry + one request, with slack
+STANDBY_SERVING_TIMEOUT_SECONDS = 20    # the taken-over standby reports "serving" and its readings advance
+STANDBY_RETURN_SECONDS = 10             # the restarted gateway must report "standby" without taking the building back
+STANDBY_POLL_SECONDS = 0.5
 # Estimate only (not measured): typical healthy run and the sum-of-deadlines bound.
-EXPECTED_RUNTIME_MINUTES = {"typical": [10, 14], "deadline_bound": 40}
+EXPECTED_RUNTIME_MINUTES = {"typical": [11, 16], "deadline_bound": 46}
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -255,6 +281,35 @@ def policy_matches(node, name):
     return isinstance(flag, bool) and flag == (name == "fair_share")
 
 
+def gateway_role(entry):
+    """`role` ("serving" | "standby" | "waiting") of an online gateway overview entry; None when the entry
+    is absent or offline, or the stack predates roles."""
+    if not isinstance(entry, dict) or not entry.get("online"):
+        return None
+    role = (entry.get("data") or {}).get("role")
+    return role if isinstance(role, str) else None
+
+
+def gateway_pair(overview, building):
+    """[(service, overview entry)] for the building's primary and standby gateway, in that order; the entry
+    is None when the overview does not list it (the `standbys` key is absent on an older stack)."""
+    def find(key):
+        return next((e for e in overview.get(key, []) if isinstance(e, dict) and e.get("id") == building), None)
+    return [(PRIMARY_SERVICE[building], find("buildings")), (STANDBY_SERVICE[building], find("standbys"))]
+
+
+def serving_gateways(overview):
+    """One gateway entry per building: the standby's once it reports role "serving" (it took the building over
+    from the primary), otherwise the primary's. Identical to overview["buildings"] on a stack without standbys."""
+    standbys = {e.get("id"): e for e in overview.get("standbys", []) if isinstance(e, dict)}
+    rows = []
+    for primary in overview.get("buildings", []):
+        standby = standbys.get(primary.get("id"))
+        serving = gateway_role(standby) == "serving" and gateway_role(primary) != "serving"
+        rows.append(standby if serving else primary)
+    return rows
+
+
 class Evaluation:
     def __init__(self, base, project_dir, output):
         self.base = base.rstrip("/")
@@ -284,12 +339,27 @@ class Evaluation:
                                   "fairness_overload_seconds": FAIRNESS_OVERLOAD_SECONDS,
                                   "fairness_convergence_timeout_seconds": FAIRNESS_CONVERGENCE_TIMEOUT_SECONDS,
                                   "fairness_tolerance_amps": FAIRNESS_TOLERANCE_AMPS,
+                                  "gateway_standbys": list(GATEWAY_STANDBYS),
+                                  "standby_takeover_trials": SAFETY_TRIALS,
+                                  "standby_ready_timeout_seconds": STANDBY_READY_TIMEOUT_SECONDS,
+                                  "standby_takeover_timeout_seconds": STANDBY_TAKEOVER_TIMEOUT_SECONDS,
+                                  "standby_serving_timeout_seconds": STANDBY_SERVING_TIMEOUT_SECONDS,
+                                  "standby_return_seconds": STANDBY_RETURN_SECONDS,
+                                  "gateway_crash_stops_the_standby": True,
                                   "expected_runtime_minutes": EXPECTED_RUNTIME_MINUTES},
                        "limitations": ["Sampled state cannot prove absence of transients between polls.",
                                         "Trials come from one run on one stack; stdev shows run-to-run spread, not independent samples.",
                                         "Decision latency includes both accepted and rejected HTTP responses.",
                                         "The first-come hold and the fair-share convergence time are single observations from one run; "
                                         "whether a building hogged depends on request timing (see spike_reproduced).",
+                                        "gateway_crash_and_reclamation stops the crashed building's standby gateway first, so "
+                                        "it measures lease reclamation only; with the standby running the building would be "
+                                        "served again about 2 s after the lease lapses.",
+                                        "gateway_standby_takeover: takeover_seconds is bounded by the coordinator's 12 s hold "
+                                        "of the dead gateway's lease plus the standby's 2 s retry plus one request, and is "
+                                        "counted from the moment the stop request returned. Each trial stops whichever gateway "
+                                        "serves a leased building; the restarted gateway stays the standby. The phase and "
+                                        "the standby gateways have never been run against Docker on the fair-sharing build.",
                                         "No gateway disk persistence, database failover, or physical breaker is evaluated."]}
 
     def request(self, path, payload=None, timeout=8):
@@ -361,14 +431,17 @@ class Evaluation:
             if total != granted or not 0 <= granted <= capacity or any(l["amps"] < 0 for l in leases):
                 failures.append({"node": node["id"], "sum_leases": total,
                                  "granted": granted, "capacity": capacity})
-        for building in overview.get("buildings", []):
-            if not building.get("online"):
-                continue
-            state = building["data"]
-            served, granted = state["served_amps"], state["granted_amps"]
-            if served < 0 or served > min(state["demand_amps"], granted) + 1e-6 or (
-                    state["lease_remaining_ms"] <= 0 and served != 0):
-                failures.append({"building": building["id"], "invalid_service": state})
+        # Standby gateways (absent on an older stack) are held to the same service rule: a gateway that has
+        # taken a building over must not serve beyond its demand, its grant or an expired lease.
+        for key, gateways in (("building", overview.get("buildings", [])), ("standby", overview.get("standbys", []))):
+            for building in gateways:
+                if not building.get("online"):
+                    continue
+                state = building["data"]
+                served, granted = state["served_amps"], state["granted_amps"]
+                if served < 0 or served > min(state["demand_amps"], granted) + 1e-6 or (
+                        state["lease_remaining_ms"] <= 0 and served != 0):
+                    failures.append({key: building["id"], "invalid_service": state})
         with self.lock:
             self.samples += 1
             self.node_samples += count
@@ -458,10 +531,13 @@ class Evaluation:
 
     @staticmethod
     def totals(overview):
-        return {"meters": sum(b["data"].get("meter_count", 0) for b in overview["buildings"] if b.get("online")),
-                "readings": sum(b["data"].get("readings_total", 0) for b in overview["buildings"] if b.get("online")),
-                "pending": sum(b["data"].get("pending_readings", 0) for b in overview["buildings"] if b.get("online")),
-                "served": sum(b["data"].get("served_amps", 0) for b in overview["buildings"] if b.get("online"))}
+        """Sums over one gateway per building: the serving one (after gateway_standby_takeover that is the
+        standby until the next restart), else the primary."""
+        online = [b for b in serving_gateways(overview) if b.get("online")]
+        return {"meters": sum(b["data"].get("meter_count", 0) for b in online),
+                "readings": sum(b["data"].get("readings_total", 0) for b in online),
+                "pending": sum(b["data"].get("pending_readings", 0) for b in online),
+                "served": sum(b["data"].get("served_amps", 0) for b in online)}
 
     def phase(self, name, function):
         print(f"[{name}] running", flush=True)
@@ -481,6 +557,7 @@ class Evaluation:
             return overview if (self.leader_in(overview) and len(overview["nodes"]) == 3
                                 and all(n.get("online") for n in overview["nodes"])
                                 and all(b.get("online") for b in overview["buildings"])
+                                and all(s.get("online") for s in overview.get("standbys", []))
                                 and overview.get("meters", {}).get("online")) else None
         overview = self.wait("all project components", ready, 120)
         if not overview.get("demo_enabled"):
@@ -521,6 +598,12 @@ class Evaluation:
         return self.repeat("gateway_crash_and_reclamation", self.gateway_crash_trial, "reclaim_seconds")
 
     def gateway_crash_trial(self):
+        """Crash the gateway of a leased building and time the lease RECLAMATION. Every building also has a
+        standby gateway that would take the building over about two seconds after the lease expires, so the
+        trial stops the building's standby first (its restart is guaranteed in `finally`, also on failure):
+        what is measured stays the coordinator's lease reclamation, not the standby's takeover, which
+        gateway_standby_takeover measures separately. The standby is stopped before the primary, so even
+        when an earlier takeover left the standby serving, both gateways of the building are down."""
         # Crash whichever real building currently holds a lease: allocation between buildings is
         # first-come (no fairness guarantee), so the holder cannot be assumed to be a fixed building.
         def held_lease():
@@ -528,22 +611,115 @@ class Evaluation:
             return next((l for l in leases if l["building_id"] in BUILDINGS and l["amps"] > 0), None)
         previous = self.wait("a building capacity lease", held_lease, 25)
         building = previous["building_id"]
-        service = "gateway-" + building.replace("_", "-")
-        self.action(service, "stop")
+        service, standby = PRIMARY_SERVICE[building], STANDBY_SERVICE[building]
         try:
-            started = time.monotonic()
-            self.wait("crashed gateway lease reclamation", lambda: not any(
-                l["building_id"] == building for l in self.leader()["data"]["leases"]), 35)
-            elapsed = time.monotonic() - started
-        except BaseException:
-            self.safe_start(service)
-            raise
-        self.action(service, "start")
-        self.wait("restarted gateway's fresh readings", lambda: any(
-            b.get("online") and b["id"] == building and b["data"]["meter_count"] > 0
-            and b["data"]["session_id"] != previous["session_id"] for b in self.overview()["buildings"]), 25)
+            self.action(standby, "stop")
+            self.action(service, "stop")
+            try:
+                started = time.monotonic()
+                self.wait("crashed gateway lease reclamation", lambda: not any(
+                    l["building_id"] == building for l in self.leader()["data"]["leases"]), 35)
+                elapsed = time.monotonic() - started
+            except BaseException:
+                self.safe_start(service)
+                raise
+            self.action(service, "start")
+            self.wait("restarted gateway's fresh readings", lambda: any(
+                b.get("online") and b["id"] == building and b["data"]["meter_count"] > 0
+                and b["data"]["session_id"] != previous["session_id"] for b in self.overview()["buildings"]), 25)
+        finally:
+            self.safe_start(standby)
         return {"building": building, "reclaim_seconds": round(elapsed, 3), "previous_amps": previous["amps"],
-                "fresh_session_verified": True}
+                "fresh_session_verified": True, "standby_stopped": True}
+
+    def gateway_standby_takeover(self):
+        return self.repeat("gateway_standby_takeover", self.standby_takeover_trial, "takeover_seconds")
+
+    def standby_takeover_trial(self):
+        """Stop the gateway that serves a leased building and time how long until its idle partner (the
+        standby) holds the building's lease under its own session, while the invariant sampler keeps running.
+
+        The ledger refuses a second session on a building whose lease is held, so the standby idles until
+        the coordinator's 12 s hold on the dead primary's lease lapses, then wins the building on its next
+        retry (about 2 s) after one request. takeover_seconds counts from the moment the stop request
+        returned until the leader lists a lease for the building with a different session and amps > 0.
+        Then: the partner reports role "serving" under that session and its readings_total grew (reading
+        continuity); the stopped gateway is restarted and must come back as "standby" while the lease still
+        carries the partner's session (it must not take the building back).
+
+        The gateway that is stopped is whichever one serves the building: the primary on a fresh stack, the
+        standby after an earlier takeover (the restarted primary stays the standby), so repeated trials work
+        in either state. `primary_returned_as_standby` is true when the restarted gateway came back as the
+        standby, whichever service that was. On any failure the stopped service is restarted and the error
+        re-raised."""
+        def candidate():
+            overview = self.overview()
+            leader = self.leader_in(overview)
+            if leader is None:
+                return None
+            for building in BUILDINGS:
+                lease = next((l for l in leader["data"]["leases"]
+                              if l["building_id"] == building and l["amps"] > 0), None)
+                roles = {service: (gateway_role(entry), entry) for service, entry in gateway_pair(overview, building)}
+                serving = [service for service, (role, _) in roles.items() if role == "serving"]
+                idle = [service for service, (role, _) in roles.items() if role == "standby"]
+                if lease and len(serving) == 1 and len(idle) == 1:
+                    readings = roles[idle[0]][1]["data"].get("readings_total", 0)
+                    return {"building": building, "lease": lease, "stopped": serving[0], "partner": idle[0],
+                            "readings_before": readings}
+            return None
+
+        def lease_of(overview, building):
+            leader = self.leader_in(overview)
+            if leader is None:
+                return None
+            return next((l for l in leader["data"]["leases"] if l["building_id"] == building), None)
+
+        chosen = self.wait("a leased building with an idle standby gateway", candidate,
+                           STANDBY_READY_TIMEOUT_SECONDS, STANDBY_POLL_SECONDS)
+        building, stopped, partner = chosen["building"], chosen["stopped"], chosen["partner"]
+        previous_session = chosen["lease"]["session_id"]
+        try:
+            self.action(stopped, "stop")
+            started = time.monotonic()
+
+            def took_over():
+                lease = lease_of(self.overview(), building)
+                return lease if lease and lease["session_id"] != previous_session and lease["amps"] > 0 else None
+            taken = self.wait("the standby gateway to take the building over", took_over,
+                              STANDBY_TAKEOVER_TIMEOUT_SECONDS, STANDBY_POLL_SECONDS)
+            elapsed = time.monotonic() - started
+            new_session = taken["session_id"]
+
+            def serving_with_readings():
+                entry = dict(gateway_pair(self.overview(), building))[partner]
+                if gateway_role(entry) != "serving" or entry["data"].get("session_id") != new_session:
+                    return None
+                after = entry["data"].get("readings_total", 0)
+                return after if after > chosen["readings_before"] else None
+            readings_after = self.wait("the standby to report serving with growing readings", serving_with_readings,
+                                       STANDBY_SERVING_TIMEOUT_SECONDS, STANDBY_POLL_SECONDS)
+            self.action(stopped, "start")
+
+            def returned_as_standby():
+                overview = self.overview()
+                entry = dict(gateway_pair(overview, building))[stopped]
+                lease = lease_of(overview, building)
+                if gateway_role(entry) == "serving":
+                    raise AssertionError(f"restarted {stopped} took {building} back from {partner}")
+                if lease and lease["session_id"] != new_session:
+                    raise AssertionError(f"{building}'s lease moved to session {lease['session_id']} after "
+                                         f"{stopped} restarted; {partner} held {new_session}")
+                return gateway_role(entry) == "standby" and lease is not None
+            self.wait("the restarted gateway to rejoin as standby", returned_as_standby,
+                      STANDBY_RETURN_SECONDS, STANDBY_POLL_SECONDS)
+        except BaseException:
+            self.safe_start(stopped)
+            raise
+        return {"building": building, "takeover_seconds": round(elapsed, 3), "previous_session_id": previous_session,
+                "new_session_id": new_session, "readings_continued": True, "primary_returned_as_standby": True,
+                "stopped_service": stopped, "taken_over_by": partner,
+                "readings_before": chosen["readings_before"], "readings_after": readings_after}
 
     def failover(self):
         return self.repeat("leader_failure", self.failover_trial, "majority_grant_seconds")
@@ -646,7 +822,8 @@ class Evaluation:
         duplicate and conflicting-request-ID checks, then the same burst under `fair_share`."""
         try:
             self.set_policy("first_come")
-            for service in (*GATEWAYS, "meters"):
+            # Standbys too: a running standby would take a stopped building over and ask for capacity again.
+            for service in (*GATEWAYS, *GATEWAY_STANDBYS, "meters"):
                 self.action(service, "stop")
             self.wait("all existing capacity reclaimed", lambda: self.leader()["data"]["granted_amps"] == 0, 35)
             node = self.leader()
@@ -675,6 +852,10 @@ class Evaluation:
             for service in (*GATEWAYS, "meters"):
                 self.action(service, "start")
             self.wait("MQTT gateways restored", lambda: self.totals(self.overview())["meters"] == 50, 30)
+            # Standbys come back after the primaries so the primaries normally serve again (this also undoes
+            # the role swap left by gateway_standby_takeover); a standby idles while its building's lease is held.
+            for service in GATEWAY_STANDBYS:
+                self.action(service, "start")
             return {"policy": "first_come", "concurrent_requests": STRESS_REQUESTS, "requested_amps_each": STRESS_AMPS,
                     "accepted": len(accepted), "rejected": STRESS_REQUESTS - len(accepted),
                     "committed_amps": granted, "capacity_amps": capacity,
@@ -809,7 +990,7 @@ class Evaluation:
         """(started_at_perf_counter_after_response, served_amps, demand_amps) from one overview."""
         overview = self.overview()
         now = time.perf_counter()
-        online = [b["data"] for b in overview["buildings"] if b.get("online")]
+        online = [b["data"] for b in serving_gateways(overview) if b.get("online")]
         return (now, sum(b.get("served_amps", 0) for b in online),
                 sum(b.get("demand_amps", 0) for b in online))
 
@@ -905,7 +1086,7 @@ class Evaluation:
         def balanced():
             overview = self.overview()
             held = reserved()
-            rows = [b for b in overview["buildings"] if b.get("online")]
+            rows = [b for b in serving_gateways(overview) if b.get("online")]
             return len(rows) == len(BUILDINGS) and all(
                 b["data"]["state"] == "active" and 1 <= held.get(b["id"], 0)
                 <= math.ceil(RECOVERY_RATIO * b["data"]["demand_amps"]) + RECOVERY_SLACK_AMPS for b in rows)
@@ -1039,6 +1220,7 @@ class Evaluation:
         try:
             self.phase("readiness_and_real_mqtt", self.readiness)
             self.phase("gateway_crash_and_reclamation", self.gateway_crash)
+            self.phase("gateway_standby_takeover", self.gateway_standby_takeover)
             self.phase("leader_failure", self.failover)
             self.phase("majority_loss", self.majority_loss)
             self.phase("postgres_outage_and_audit_catchup", self.postgres_outage)

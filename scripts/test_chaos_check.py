@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -287,7 +288,7 @@ class ClassifyTests(unittest.TestCase):
 
 
 class ScheduleTests(unittest.TestCase):
-    SERVICES = set(cc.COORDINATORS) | set(cc.GATEWAYS) | {"postgres"}
+    SERVICES = set(cc.COORDINATORS) | set(cc.GATEWAYS) | set(cc.GATEWAY_STANDBYS) | {"postgres"}
 
     def test_deterministic_for_seed(self):
         self.assertEqual(cc.build_schedule(1, 90), cc.build_schedule(1, 90))
@@ -362,6 +363,142 @@ class ScheduleTests(unittest.TestCase):
     def test_all_service_kinds_appear_across_seeds(self):
         seen = {e["service"] for seed in range(20) for e in cc.build_schedule(seed, 120)}
         self.assertEqual(seen, self.SERVICES)
+
+
+class StandbyFaultTests(unittest.TestCase):
+    """Standby gateways are faultable; the choice must not disturb the rest of a seed's schedule."""
+
+    # build_schedule(1, 90) before standbys existed: (at, action, service, window)
+    LEGACY_SEED_1 = [
+        (6, "stop", "coordinator2", None), (14, "start", "coordinator2", None),
+        (20, "stop", "gateway-hamra", None), (28, "start", "gateway-hamra", None),
+        (35, "stop", "coordinator3", "majority_loss"), (36, "stop", "coordinator1", "majority_loss"),
+        (51, "start", "coordinator3", "majority_loss"), (52, "start", "coordinator1", "majority_loss"),
+        (56, "stop", "gateway-mar-mikhael", None), (66, "start", "gateway-mar-mikhael", None),
+        (70, "stop", "gateway-hamra", None), (77, "start", "gateway-hamra", None)]
+
+    def test_standbys_are_named_after_their_primary_and_faultable(self):
+        self.assertEqual(len(cc.GATEWAY_STANDBYS), 3)
+        self.assertEqual(cc.STANDBY_OF, {p: p + "-standby" for p in cc.GATEWAYS})
+        for service in (*cc.GATEWAYS, *cc.GATEWAY_STANDBYS):
+            self.assertIn(service, cc.FAULTABLE)
+        self.assertEqual(len(cc.FAULTABLE), len(set(cc.FAULTABLE)))
+
+    def test_gateway_faults_hit_primaries_and_standbys(self):
+        services = {e["service"] for seed in range(20) for e in cc.build_schedule(seed, 120)}
+        self.assertTrue(set(cc.GATEWAYS) <= services)
+        self.assertTrue(set(cc.GATEWAY_STANDBYS) <= services)
+
+    def test_a_standby_fault_never_changes_times_kinds_or_the_building(self):
+        back = {standby: primary for primary, standby in cc.STANDBY_OF.items()}
+        for seed in range(40):
+            for duration in (20, 90, 180):
+                mapped = [(e["at"], e["action"], back.get(e["service"], e["service"]), e.get("window"))
+                          for e in cc.build_schedule(seed, duration)]
+                self.assertEqual(mapped, self.legacy(seed, duration), (seed, duration))
+
+    @staticmethod
+    def legacy(seed, duration):
+        """Re-derive the schedule without the standby stream: draw from `rng` exactly as before."""
+        import random
+        rng = random.Random(seed)
+        events, segments = [], []
+        if duration >= 60:
+            start = rng.randint(int(duration * 0.35), int(duration * 0.55))
+            first, second = rng.sample(cc.COORDINATORS, 2)
+            end = start + cc.MAJORITY_WINDOW_SECONDS
+            for at, service, action in ((start, first, "stop"), (start + 1, second, "stop"),
+                                        (end, first, "start"), (end + 1, second, "start")):
+                events.append((at, action, service, "majority_loss"))
+            segments = [(4, start - 3), (end + 5, duration - 2)]
+        else:
+            segments = [(3, duration - 2)]
+        for low, high in segments:
+            at = low + rng.randint(0, 3)
+            while True:
+                kind = rng.choices(("coordinator", "gateway", "postgres"), weights=(4, 4, 2))[0]
+                service = rng.choice({"coordinator": cc.COORDINATORS, "gateway": cc.GATEWAYS,
+                                      "postgres": ("postgres",)}[kind])
+                dwell = rng.randint(5, 10)
+                if at + dwell > high:
+                    break
+                events.append((at, "stop", service, None))
+                events.append((at + dwell, "start", service, None))
+                at += dwell + rng.randint(3, 7)
+        return sorted(events, key=lambda event: event[0])
+
+    def test_seed_1_schedule_is_pinned(self):
+        back = {standby: primary for primary, standby in cc.STANDBY_OF.items()}
+        schedule = cc.build_schedule(1, 90)
+        self.assertEqual([(e["at"], e["action"], back.get(e["service"], e["service"]), e.get("window"))
+                          for e in schedule], self.LEGACY_SEED_1)
+        # Deliberate: of the four seed-1 gateway events only the one at +70 s now names the standby.
+        self.assertEqual([e["service"] for e in schedule if e["at"] in (70, 77)], ["gateway-hamra-standby"] * 2)
+        self.assertEqual([e["service"] for e in schedule if e["at"] in (20, 28, 56, 66)],
+                         ["gateway-hamra", "gateway-hamra", "gateway-mar-mikhael", "gateway-mar-mikhael"])
+
+
+class StandbyHealTests(unittest.TestCase):
+    def chaos(self):
+        return cc.Chaos("http://stack.invalid", 1, 10, 1, Path("unused.json"))
+
+    @staticmethod
+    def overview(standbys=None, gateways_up=3):
+        nodes = [{"id": f"coordinator{i}", "online": True,
+                  "data": {"state": "Leader" if i == 1 else "Follower", "quorum": True}} for i in (1, 2, 3)]
+        view = {"nodes": nodes, "buildings": [{"id": f"b{i}", "online": i < gateways_up} for i in range(3)]}
+        if standbys is not None:
+            view["standbys"] = [{"id": f"b{i}", "online": up} for i, up in enumerate(standbys)]
+        return view
+
+    def heal(self, chaos, overviews):
+        queue = list(overviews)
+        chaos.overview = lambda: queue.pop(0) if len(queue) > 1 else queue[0]
+        chaos.act = lambda service, action: (chaos.actions.append((service, action)) or (True, 200))
+        with mock.patch.object(cc.time, "sleep"):
+            return chaos.heal()
+
+    def test_heal_restarts_every_service_including_the_standbys(self):
+        chaos = self.chaos()
+        self.assertTrue(self.heal(chaos, [self.overview([True] * 3)]))
+        started = [service for service, action in chaos.actions if action == "start"]
+        self.assertEqual(started, list(cc.FAULTABLE))
+        self.assertEqual([r["service"] for r in chaos.restoration], list(cc.FAULTABLE))
+        self.assertTrue(all(r["started"] for r in chaos.restoration))
+        self.assertTrue(set(cc.GATEWAY_STANDBYS) <= {r["service"] for r in chaos.restoration})
+
+    def test_heal_waits_until_the_standbys_are_back(self):
+        chaos = self.chaos()
+        seen = []
+        queue = [self.overview([True, False, True]), self.overview([True, True, True])]
+        chaos.act = lambda service, action: (True, 200)
+        def overview():
+            seen.append(1)
+            return queue.pop(0) if len(queue) > 1 else queue[0]
+        chaos.overview = overview
+        with mock.patch.object(cc.time, "sleep"):
+            self.assertTrue(chaos.heal())
+        self.assertEqual(len(seen), 2)            # the first overview had a standby down
+
+    def test_heal_does_not_wait_for_standbys_on_a_stack_without_them(self):
+        self.assertTrue(self.heal(self.chaos(), [self.overview(None)]))
+
+    def test_sample_once_counts_standbys_up(self):
+        chaos = self.chaos()
+        leader = {"id": "coordinator1", "online": True,
+                  "data": {"state": "Leader", "quorum": True, "granted_amps": 5, "capacity_amps": 120,
+                           "leases": [{"amps": 5}]}}
+        view = {"nodes": [leader], "buildings": [], "standbys": [{"id": "hamra", "online": True},
+                                                                 {"id": "achrafieh", "online": False}]}
+        chaos.overview = lambda: view
+        chaos.sample_once()
+        self.assertEqual(chaos.status_samples[0]["standbys_up"], 1)
+
+    def test_the_recorded_history_check_is_as_strict_as_before(self):
+        # Standbys change nothing about the capacity invariant the history check enforces.
+        over = cc.check_history([{"t": 1, "granted": 121, "capacity": 120}], [], 120)
+        self.assertEqual(len(over["violations"]), 1)
+        self.assertEqual(cc.check_history([{"t": 1, "granted": 120, "capacity": 120}], [], 120)["violations"], [])
 
 
 if __name__ == "__main__":
