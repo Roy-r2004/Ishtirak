@@ -12,6 +12,8 @@ func TestDemoControlsRejectUnsafeRequests(t *testing.T){
  tests:=[]struct{name,body,origin string;want int}{
   {"unknown container",`{"service":"unrelated-database","action":"stop"}`,"",400},
   {"arbitrary action",`{"service":"coordinator1","action":"exec"}`,"",400},
+  {"standby with arbitrary action",`{"service":"gateway-hamra-standby","action":"exec"}`,"",400},
+  {"unlisted standby",`{"service":"gateway-unknown-standby","action":"stop"}`,"",400},
   {"cross origin",`{"service":"coordinator1","action":"stop"}`,"http://attacker.example",403},
  }
  for _,tc:=range tests{t.Run(tc.name,func(t *testing.T){r:=httptest.NewRequest("POST","http://localhost:8088/api/actions",strings.NewReader(tc.body));r.Header.Set("Content-Type","application/json");r.Header.Set("Origin",tc.origin);w:=httptest.NewRecorder();action(w,r);if w.Code!=tc.want{t.Fatalf("got %d want %d",w.Code,tc.want)}})}

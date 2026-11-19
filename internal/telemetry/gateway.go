@@ -18,6 +18,23 @@ import (
 const MaxPending = 5000
 const sampleTTL = 5 * time.Second
 
+// Active/standby pair (docs/GATEWAY_STANDBY.md). Two gateways may run for one building; the ledger lets only one
+// session hold the building's lease, so the other is refused with ReasonSessionActive until that lease is committed
+// as expired. A refused gateway asks again no sooner than StandbyRetry after the refusal (a refused request still
+// costs a Raft entry; the renewal loop ticks once per second, so in practice every 2 to 3 s) and reports Role
+// "standby" while its latest outcome is such a refusal no older than standbyWindow.
+const (
+	StandbyRetry  = 2 * time.Second
+	standbyWindow = 8 * time.Second
+
+	// ReasonSessionActive is the ledger's refusal for a building whose lease is held by another session.
+	ReasonSessionActive = "building_session_active"
+
+	RoleServing = "serving" // holds a live local lease (state active or limited)
+	RoleStandby = "standby" // another gateway session holds the building
+	RoleWaiting = "waiting" // neither: no lease yet, or the lease lapsed
+)
+
 type GatewayConfig struct {
 	BuildingID   string
 	Name         string
@@ -48,6 +65,9 @@ type Gateway struct {
 	lastError      string
 	lastAttempt    time.Time
 	hadGrant       bool
+	// The latest refusal outcome; cleared by a later accepted grant. Drives Role and the standby back-off.
+	refusedAt     time.Time
+	refusedReason string
 }
 
 type GatewayStatus struct {
@@ -61,6 +81,7 @@ type GatewayStatus struct {
 	LeaseRemainingMS int64   `json:"lease_remaining_ms"`
 	LeaseVersion     uint64  `json:"lease_version"`
 	State            string  `json:"state"`
+	Role             string  `json:"role"`
 	MQTTConnected    bool    `json:"mqtt_connected"`
 	PendingReadings  int     `json:"pending_readings"`
 	DroppedReadings  uint64  `json:"dropped_readings"`
@@ -172,7 +193,25 @@ func (g *Gateway) statusLocked(now time.Time) GatewayStatus {
 	} else if g.hadGrant {
 		s.State = "expired"
 	}
+	switch {
+	case s.State == "active" || s.State == "limited":
+		s.Role = RoleServing
+	case g.refusedWithin(now, standbyWindow):
+		s.Role = RoleStandby
+	default:
+		s.Role = RoleWaiting
+	}
 	return s
+}
+
+// refusedWithin reports whether the latest grant outcome is a ReasonSessionActive refusal received less than d ago.
+// A clock that moved backwards (negative age) is not a recent refusal. Callers hold g.mu.
+func (g *Gateway) refusedWithin(now time.Time, d time.Duration) bool {
+	if g.refusedReason != ReasonSessionActive {
+		return false
+	}
+	age := now.Sub(g.refusedAt)
+	return age >= 0 && age < d
 }
 
 func (g *Gateway) Status() GatewayStatus {
@@ -187,6 +226,7 @@ func (g *Gateway) ApplyGrant(req GrantRequest, started time.Time, response Grant
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if !response.Accepted {
+		g.refusedAt, g.refusedReason = g.now(), response.Reason
 		return fmt.Errorf("grant refused: %s", response.Reason)
 	}
 	if req.BuildingID != g.cfg.BuildingID || req.SessionID != g.session || response.RequestID != req.RequestID || response.Lease.BuildingID != req.BuildingID || response.Lease.SessionID != req.SessionID || response.Lease.Amps < 0 || response.Lease.Amps > 1000000 || response.Lease.Version == 0 || response.LeaseMS <= 0 || response.LeaseMS > LeaseTTL.Milliseconds() {
@@ -196,6 +236,7 @@ func (g *Gateway) ApplyGrant(req GrantRequest, started time.Time, response Grant
 	if !expires.After(g.now()) {
 		return errors.New("grant response arrived after safe deadline")
 	}
+	g.refusedReason = "" // the latest outcome is an accepted grant, so this gateway is not (or no longer) refused
 	// A repeated reply may add an identical entry but never extend its lifetime.
 	for _, grant := range g.grants {
 		if grant.version == response.Lease.Version && grant.expires.Equal(expires) && grant.amps == response.Lease.Amps {
@@ -274,6 +315,11 @@ func (g *Gateway) Renew(ctx context.Context) error {
 	g.mu.Lock()
 	now := g.now()
 	s := g.statusLocked(now)
+	// Another gateway session holds the building: asking again before StandbyRetry would only add Raft entries.
+	if g.refusedWithin(now, StandbyRetry) {
+		g.mu.Unlock()
+		return nil
+	}
 	if !g.lastAttempt.IsZero() && now.Sub(g.lastAttempt) < 3*time.Second && int(math.Ceil(s.DemandAmps)) <= s.GrantedAmps {
 		g.mu.Unlock()
 		return nil

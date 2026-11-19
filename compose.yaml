@@ -67,6 +67,20 @@ services:
     <<: *gateway
     container_name: ishtirak-gateway-achrafieh
     environment: {<<: *gateway-env, BUILDING_ID: achrafieh, BUILDING_NAME: "Achrafieh Gardens"}
+  # One standby gateway per building (docs/GATEWAY_STANDBY.md): the same code and BUILDING_ID as the primary. The
+  # ledger refuses its grant requests until the primary's lease has expired, so it only serves after the primary fails.
+  gateway-hamra-standby:
+    <<: *gateway
+    container_name: ishtirak-gateway-hamra-standby
+    environment: {<<: *gateway-env, BUILDING_ID: hamra, BUILDING_NAME: "Hamra Residence"}
+  gateway-mar-mikhael-standby:
+    <<: *gateway
+    container_name: ishtirak-gateway-mar-mikhael-standby
+    environment: {<<: *gateway-env, BUILDING_ID: mar_mikhael, BUILDING_NAME: "Mar Mikhael House"}
+  gateway-achrafieh-standby:
+    <<: *gateway
+    container_name: ishtirak-gateway-achrafieh-standby
+    environment: {<<: *gateway-env, BUILDING_ID: achrafieh, BUILDING_NAME: "Achrafieh Gardens"}
   meters:
     build: {context: ., args: {SERVICE: meters}}
     container_name: ishtirak-meters

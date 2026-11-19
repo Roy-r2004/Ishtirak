@@ -19,9 +19,11 @@ import (
 var services = map[string]string{
 	"coordinator1": "coordinator1", "coordinator2": "coordinator2", "coordinator3": "coordinator3",
 	"gateway-hamra": "gateway-hamra", "gateway-mar-mikhael": "gateway-mar-mikhael", "gateway-achrafieh": "gateway-achrafieh",
+	"gateway-hamra-standby": "gateway-hamra-standby", "gateway-mar-mikhael-standby": "gateway-mar-mikhael-standby", "gateway-achrafieh-standby": "gateway-achrafieh-standby",
 	"meters": "meters", "postgres": "postgres", "mosquitto": "mosquitto",
 }
 var coordinators = []string{"coordinator1", "coordinator2", "coordinator3"}
+var buildingIDs = []string{"hamra", "mar_mikhael", "achrafieh"}
 var client = &http.Client{Timeout: 1800 * time.Millisecond}
 var docker = &http.Client{Timeout: 12 * time.Second, Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 	return (&net.Dialer{}).DialContext(ctx, "unix", "/var/run/docker.sock")
@@ -61,25 +63,31 @@ func overview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	nodes := make([]source, 3)
-	buildings := make([]source, 3)
+	buildings := make([]source, len(buildingIDs))
+	standbys := make([]source, len(buildingIDs))
 	var meters source
 	var wg sync.WaitGroup
 	for i, id := range coordinators {
 		wg.Add(1)
 		go func(i int, id string) { defer wg.Done(); nodes[i] = fetch(id, coordinatorURL(id)+"/api/status") }(i, id)
 	}
-	for i, id := range []string{"hamra", "mar_mikhael", "achrafieh"} {
-		wg.Add(1)
-		go func(i int, id string) {
+	for i, id := range buildingIDs {
+		wg.Add(2)
+		host := "gateway-" + strings.ReplaceAll(id, "_", "-")
+		go func(i int, id, host string) {
 			defer wg.Done()
-			host := "gateway-" + strings.ReplaceAll(id, "_", "-")
-			buildings[i] = fetch(id, "http://"+host+":8080/api/status")
-		}(i, id)
+			buildings[i] = fetch(id, serviceURL(host)+"/api/status")
+		}(i, id, host)
+		// Each building has a standby gateway running the same code (docs/GATEWAY_STANDBY.md); it is reported under the building id.
+		go func(i int, id, host string) {
+			defer wg.Done()
+			standbys[i] = fetch(id, serviceURL(host+"-standby")+"/api/status")
+		}(i, id, host)
 	}
 	wg.Add(1)
-	go func() { defer wg.Done(); meters = fetch("meters", "http://meters:8080/api/status") }()
+	go func() { defer wg.Done(); meters = fetch("meters", serviceURL("meters")+"/api/status") }()
 	wg.Wait()
-	respond(w, 200, map[string]any{"nodes": nodes, "buildings": buildings, "meters": meters, "observed_at": time.Now().UTC(), "demo_enabled": os.Getenv("ENABLE_DEMO") == "true"})
+	respond(w, 200, map[string]any{"nodes": nodes, "buildings": buildings, "standbys": standbys, "meters": meters, "observed_at": time.Now().UTC(), "demo_enabled": os.Getenv("ENABLE_DEMO") == "true"})
 }
 func validMutation(w http.ResponseWriter, r *http.Request) bool {
 	if r.Method != "POST" {
@@ -173,8 +181,10 @@ func meterConfig(w http.ResponseWriter, r *http.Request) {
 	_, _ = io.Copy(w, io.LimitReader(res.Body, 8192))
 }
 
-// coordinatorURL is where a coordinator's HTTP API lives; tests replace it.
+// coordinatorURL is where a coordinator's HTTP API lives, serviceURL the same for any other compose service
+// (gateways, standbys, meters); tests replace them.
 var coordinatorURL = func(id string) string { return "http://" + id + ":8080" }
+var serviceURL = func(host string) string { return "http://" + host + ":8080" }
 
 // The leader commits the change through Raft, which can take a couple of seconds; a redirect (a node that is no
 // longer the leader) is reported, never followed.
