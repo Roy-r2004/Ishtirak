@@ -37,7 +37,7 @@ class FakeStack(evaluate.Evaluation):
         self.fair, self.meters, self.calls = True, 50, 0
         self.hog_forms, self.converges, self.partial_in_first_come = hog_forms, converges, partial_in_first_come
         self.flipped_at = None
-        self.policy_posts, self.configs = [], []
+        self.policy_posts, self.configs, self.action_log = [], [], []
         self.ledger, self.stored, self.version = {}, {}, 0
         self.guard = threading.Lock()
 
@@ -54,6 +54,7 @@ class FakeStack(evaluate.Evaluation):
             self.meters = payload["meter_count"]
             return reply(200, {})
         if path == "/api/actions":
+            self.action_log.append((payload["service"], payload["action"]))
             if payload["service"] == "meters":  # the meter fleet drives the real buildings' reservations
                 self.meters = 0 if payload["action"] == "stop" else 50
             return reply(200, {})
@@ -183,6 +184,19 @@ class CapacityStressTests(unittest.TestCase):
         self.assertEqual(variant["capacity_amps"], CAPACITY)
         self.assertEqual(variant["partial_lease_amps"]["max"], 1)
         self.assertEqual(stack.policy_posts, ["first_come", "fair_share", "fair_share"])
+
+    def test_standby_gateways_are_stopped_with_the_primaries_and_started_after_them(self):
+        stack = FakeStack()
+        stack.capacity_stress()
+        stops = [service for service, action in stack.action_log if action == "stop"]
+        starts = [service for service, action in stack.action_log if action == "start"]
+        everything = {*evaluate.GATEWAYS, *evaluate.GATEWAY_STANDBYS, "meters"}
+        self.assertEqual(set(stops), everything)
+        self.assertEqual(len(stops), len(everything))
+        # A running standby would take a stopped building over, so all stops come before any start.
+        self.assertLess(max(i for i, (_, a) in enumerate(stack.action_log) if a == "stop"),
+                        min(i for i, (_, a) in enumerate(stack.action_log) if a == "start"))
+        self.assertEqual(starts, [*evaluate.GATEWAYS, "meters", *evaluate.GATEWAY_STANDBYS])
 
     def test_a_partial_grant_under_first_come_is_a_failure(self):
         stack = FakeStack(partial_in_first_come=True)

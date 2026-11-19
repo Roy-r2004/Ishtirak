@@ -6,7 +6,9 @@ Preview the deterministic fault schedule without any network access:
     python scripts/chaos_check.py --seed 1 --duration 90 --dry-run
 
 While a seeded schedule of single-service stop/start faults runs (coordinators,
-gateways, PostgreSQL, plus one explicit majority-loss window), worker threads
+gateways and their standby gateways, PostgreSQL, plus one explicit majority-loss
+window; a gateway fault hits the primary or its standby, the choice drawn from a
+second random stream so the rest of a seed's schedule is unchanged), worker threads
 send randomized grants, renewals, replayed duplicates and one conflicting-payload
 replay to random coordinators using synthetic chaos-* building and session ids.
 A sampler records granted totals from /api/overview. At the end every service is
@@ -45,7 +47,10 @@ import uuid
 
 COORDINATORS = ("coordinator1", "coordinator2", "coordinator3")
 GATEWAYS = ("gateway-hamra", "gateway-mar-mikhael", "gateway-achrafieh")
-FAULTABLE = ("postgres", *COORDINATORS, *GATEWAYS)
+GATEWAY_STANDBYS = ("gateway-hamra-standby", "gateway-mar-mikhael-standby", "gateway-achrafieh-standby")
+STANDBY_OF = dict(zip(GATEWAYS, GATEWAY_STANDBYS))
+FAULTABLE = ("postgres", *COORDINATORS, *GATEWAYS, *GATEWAY_STANDBYS)
+STANDBY_FAULT_FRACTION = 0.5   # share of gateway faults that hit the building's standby instead of its primary
 CAPACITY = 120
 PARTIAL_REASON = "granted_partial"   # fair_share: accepted with lease amps below the request
 MAJORITY_WINDOW_SECONDS = 16
@@ -56,6 +61,7 @@ LIMITS = [
     "Under the fair_share policy some accepted grants are granted_partial (fewer amps than requested); they count as accepted and are checked against the lease amps returned.",
     "The admission policy is read from coordinator status, not set, by this checker; a policy change by someone else during the run shows up in policy.observed_during_run.",
     "Convergence is a point-in-time comparison of applied indexes after healing; gateways keep renewing, so it is retried until the values agree.",
+    "Standby gateways are faulted like any other service, but the checker neither times a takeover nor checks which gateway serves a building; the capacity history is checked as before.",
     "No gateway disk persistence, database failover or physical breaker is evaluated.",
 ]
 
@@ -161,8 +167,13 @@ def count_outcomes(rows):
 
 
 def build_schedule(seed, duration):
-    """Deterministic single-service faults; one explicit majority-loss window when duration >= 60."""
+    """Deterministic single-service faults; one explicit majority-loss window when duration >= 60.
+
+    A gateway fault hits a building's primary or its standby gateway. That choice comes from a second
+    random stream, so the times, kinds, dwell times and buildings of a seed are exactly those of a
+    schedule without standbys; only the service name of some gateway faults changes (primary -> standby)."""
     rng = random.Random(seed)
+    standby_rng = random.Random(f"standby:{seed}")
     events, segments = [], []
     if duration >= 60:
         start = rng.randint(int(duration * 0.35), int(duration * 0.55))
@@ -179,6 +190,8 @@ def build_schedule(seed, duration):
         while True:
             kind = rng.choices(("coordinator", "gateway", "postgres"), weights=(4, 4, 2))[0]
             service = rng.choice({"coordinator": COORDINATORS, "gateway": GATEWAYS, "postgres": ("postgres",)}[kind])
+            if kind == "gateway" and standby_rng.random() < STANDBY_FAULT_FRACTION:
+                service = STANDBY_OF[service]
             dwell = rng.randint(5, 10)
             if at + dwell > high:
                 break
@@ -278,6 +291,7 @@ class Chaos:
         flag = leader["data"].get("fair_share") if leader else None
         status = {"t": at, "coordinators_up": sum(1 for n in overview["nodes"] if n.get("online")),
                   "gateways_up": sum(1 for b in overview.get("buildings", []) if b.get("online")),
+                  "standbys_up": sum(1 for b in overview.get("standbys", []) if b.get("online")),
                   "leader": leader["id"] if leader else None,
                   "fair_share": flag if isinstance(flag, bool) else None}
         with self.lock:
@@ -408,7 +422,9 @@ class Chaos:
                 overview = self.overview()
                 nodes_up = sum(1 for n in overview["nodes"] if n.get("online"))
                 gateways_up = sum(1 for b in overview.get("buildings", []) if b.get("online"))
-                if nodes_up == 3 and gateways_up >= 3 and self.leader_in(overview):
+                # `standbys` is absent on a stack without standby gateways; then there is nothing to wait for.
+                standbys_down = sum(1 for b in overview.get("standbys", []) if not b.get("online"))
+                if nodes_up == 3 and gateways_up >= 3 and not standbys_down and self.leader_in(overview):
                     return True
             except Exception:
                 pass
@@ -482,7 +498,7 @@ class Chaos:
             if any(not item["started"] for item in self.restoration) or not self.restoration:
                 failures.append("failed restoration: not every service was restarted")
             if not ready:
-                failures.append("cluster did not return to 3 coordinators, 3 gateways and a leader")
+                failures.append("cluster did not return to 3 coordinators, 3 gateways, every standby gateway and a leader")
             if not self.convergence.get("converged"):
                 failures.append("coordinators did not converge on one applied index after healing")
             if not self.samples:
