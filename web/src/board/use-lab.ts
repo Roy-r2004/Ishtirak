@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Grid } from '../data'
-import { advance, begin, cancelRun, catalogue, commandKey, commandRequest, deriveTimeline, dwellProgress, hasPending, isService, isStress, overload, proof, restoreCommands, type Command, type Observation, type RunState, type Scenario, type TimelineEvent } from '../lab/scenarios'
+import { advance, begin, cancelRun, commandKey, nextCommand, commandRequest, deriveTimeline, dwellProgress, hasPending, isService, isStress, overload, proof, restoreCommands, scenarioOf, type Command, type Observation, type RunState, type Scenario, type TimelineEvent } from '../lab/scenarios'
 import type { Policy } from '../lab/fairness'
 import type { Capture } from '../lab/scenarios'
 import { emptyPeak, trackPeak, type PeakState } from './peak'
@@ -11,7 +11,7 @@ const RETRY_MS = 5000
 /** What the dashboard can claim right now. Stale or missing data is never fresh. */
 export function observe(grid: Grid): Observation {
   const c = grid.cluster
-  return { at: Date.now(), leader: grid.data?.nodes.find(n => n.online && n.data?.state === 'Leader')?.id ?? null, nodesUp: grid.nodes.filter(n => n.online).map(n => n.id), buildingsUp: grid.buildings.filter(b => b.online).map(b => b.id), granted: c?.granted_amps ?? 0, capacity: c?.capacity_amps ?? 0, quorum: grid.quorum, stale: grid.stale || !c || !grid.data, postgresUp: c ? c.postgres_connected : undefined, policy: grid.policy, meters: grid.data?.meters.online && grid.data.meters.data ? { meter_count: grid.data.meters.data.meter_count, demand_factor: grid.data.meters.data.demand_factor } : null, wants: c?.wants, reserved: c?.leases }
+  return { at: Date.now(), leader: grid.data?.nodes.find(n => n.online && n.data?.state === 'Leader')?.id ?? null, nodesUp: grid.nodes.filter(n => n.online).map(n => n.id), buildingsUp: grid.buildings.filter(b => b.online).map(b => b.id), granted: c?.granted_amps ?? 0, capacity: c?.capacity_amps ?? 0, quorum: grid.quorum, stale: grid.stale || !c || !grid.data, pairs: grid.pairs ? Object.fromEntries(Object.entries(grid.pairs).map(([id, v]) => [id, { primary: v.primary.state, standby: v.standby.state }])) : undefined, postgresUp: c ? c.postgres_connected : undefined, policy: grid.policy, meters: grid.data?.meters.online && grid.data.meters.data ? { meter_count: grid.data.meters.data.meter_count, demand_factor: grid.data.meters.data.demand_factor } : null, wants: c?.wants, reserved: c?.leases }
 }
 export const isActive = (r: RunState | null) => !!r && (r.status === 'running' || r.status === 'restoring' || hasPending(r))
 
@@ -52,11 +52,10 @@ export function useLab(grid: Grid) {
   // Send queued commands one at a time through the label-checked controller.
   useEffect(() => {
     if (!queue.current.length || grid.busy || !enabled) return
-    const cmd = queue.current.shift()!
-    if (isStress(cmd, runRef.current) && runRef.current?.status !== 'running') return
-    const key = commandKey(cmd), t = Date.now()
-    if (t - (sentAt.current[key] ?? 0) < RETRY_MS) return
-    sentAt.current[key] = t; send(cmd)
+    const t = Date.now(), next = nextCommand(queue.current, runRef.current, sentAt.current, t, RETRY_MS)
+    queue.current = next.queue // a command sent less than RETRY_MS ago stays queued and goes out when the window has passed
+    if (!next.command) return
+    sentAt.current[commandKey(next.command)] = t; send(next.command)
   }, [grid.now, grid.busy, enabled])
   // Always restore on unmount or page close, bypassing the shared action lock.
   useEffect(() => {
@@ -75,7 +74,7 @@ export function useLab(grid: Grid) {
     const x = begin(s, current, Date.now(), params); setRun(x.run); enqueue(x.commands)
   }
   function cancel() { const r = runRef.current; if (r && r.status === 'running') { queue.current = queue.current.filter(c => !isStress(c, r)); setRun(cancelRun(r, Date.now())) } }
-  const current = run ? catalogue.find(s => s.id === run.id) : undefined
+  const current = run ? scenarioOf(run) : undefined
   const step = run && current ? current.steps[Math.min(run.step, current.steps.length - 1)] : undefined
   return { history, timeline, run, runPolicy, setRunPolicy, results, stats, peak, enabled, running, fresh, start, cancel, dismiss: () => setRun(null), current, step, pending: !!run && hasPending(run), settings: !!run?.snapshot, dwell: run ? dwellProgress(run, grid.now) : null, overload }
 }

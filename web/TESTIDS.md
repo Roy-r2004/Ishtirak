@@ -30,18 +30,21 @@ The ids were kept; where the interaction changed, the note says how.
 | `violations` | 1 | violation counter | `data-count` |
 | `capacity-proof` | 1 | one-line proof in the Capacity panel | `data-state` = `none` / `safe` / `violated`; text starts "No violation observed" when safe |
 | `free-readout`, `served-readout`, `curtailed-readout` | 1 each | free = capacity minus reserved, served = sum of the gateways' served amps, curtailed = requested minus served | `data-value` = the number to one decimal, empty when unknown; text reads `<n> A`, or an em dash when the data is stale or the source is missing. Curtailed is `0 A` when nothing is curtailed, never negative |
-| `feeder` | 3 | one building column of the single-line diagram, including its line, breaker and metering block (Diagram.tsx) | `data-building` (`hamra`, `mar_mikhael`, `achrafieh`), `data-state` (text such as "Within budget"), `data-online`, `data-stale` |
+| `feeder` | 3 | one building column of the single-line diagram, including its line, breaker and metering block (Diagram.tsx) | `data-building` (`hamra`, `mar_mikhael`, `achrafieh`), `data-state` (text such as "Within budget"), `data-online` (the building's primary gateway answers), `data-stale`. With standbys, the figures and the state text come from the gateway that serves the building, and `feeder-state` adds "via standby" when the standby serves |
+| `gateway-pair` | 3 (0 on a backend without standbys) | the Gateways strip at the foot of each building's metering block (Diagram.tsx); one per building, drawn only when the overview carries `standbys` | `data-building`, `data-serving` (`primary`, `standby`, `none`, or `unknown` when no fresh, complete report says who serves), `data-takeover` (true when the standby serves and the primary does not), `data-tone` (`ok`, `warn`, `fault`, `off`) |
+| `gateway-headline` | 3 (0 without standbys) | inside `gateway-pair`: the pair in plain words with a symbol: "Primary serving", "Served by standby", "No gateway serving", "Gateway status unknown" or "Both report serving" | text is the headline |
+| `gateway-primary`, `gateway-standby` | 3 each (0 without standbys) | the two rows inside `gateway-pair`, each a name, a symbol and a word ("Serving", "Standby ready", "Waiting", "Stopped", "Unknown") | `data-role` (`serving`, `standby`, `waiting`, `stopped`, `unknown`: the role the gateway reported, `stopped` when it does not answer, `unknown` for stale or incomplete data), `data-online` (the dashboard reached it). After a takeover the primary row can read `standby` and the standby row `serving`: the names are the containers, the role is what they do now |
 | `relay` | 3 | one row of the Coordinators table (CoordinatorsTable.tsx) | `data-node` (`coordinator1..3`), `data-role` (`Leader`, `Follower`, `Candidate`, `Unreachable`), `data-stale` |
 | `help-open` | 1 | "About this system" button in the top bar | `aria-haspopup=dialog` |
 | `help-dialog`, `help-close` | 1 each | the About drawer (Drawers.tsx), exists only while open | |
 | `meters-10`, `meters-50`, `meters-200` | 1 each | the meter choice in the Simulation tab (Simulation.tsx) | `aria-checked`, `data-selected` |
 | `sim-apply` | 1 | "Apply" in the Simulation tab | `disabled` while an action is in flight |
 | `ledger-row` | n | one per audit event in the Allocation log, newest first (AllocationLog.tsx) | `data-kind` (`granted`, `shrunk`, `reclaimed`) |
-| `scenario` | 4 | leader failover, majority loss, gateway crash, database outage (FailureTests.tsx) | `data-scenario` (scenario id, e.g. `leader-failover`), `data-state` (`idle`, `running`, `restoring`, `done`, `timeout`, `cancelled`) |
+| `scenario` | 4 | leader failover, majority loss, gateway crash, database outage (FailureTests.tsx); see "Failure scenarios" below for what gateway crash does | `data-scenario` (scenario id, e.g. `leader-failover`), `data-state` (`idle`, `running`, `restoring`, `done`, `timeout`, `cancelled`) |
 | `scenario-cover` | 4 | the Run button of each scenario: the first step | `aria-expanded` |
 | `scenario-run` | 4 | Confirm in the inline question: the second step. Always in the document; hidden and `disabled` until the first step | |
 | `scenario-status` | 1 | live status window (`role=status`) | `data-state`; text contains "Completed" when a run finished |
-| `timeline-item` | n | rows of Observed events | `data-kind` (`leader_elected`, `leader_lost`, `node_down`, `node_up`, `quorum_lost`, `quorum_restored`) |
+| `timeline-item` | n | rows of Observed events | `data-kind` (`leader_elected`, `leader_lost`, `node_down`, `node_up`, `quorum_lost`, `quorum_restored`, `standby_took_over`: a gateway that was standing by is now observed serving) |
 | `policy-switch` | 1 | the admission policy segmented control in the top bar (TopBar.tsx) | |
 | `policy-fair_share`, `policy-first_come` | 1 each | the two options | `aria-checked`, `data-selected` |
 | `overload-run` | 1 | Confirm of the Overload test (second step) | |
@@ -76,6 +79,8 @@ Drawers are modal dialogs on the right: focus moves inside when one opens, Tab s
 | `cluster-door`, `cluster-door-close` | the Cluster details drawer |
 | `cluster-facts`, `cluster-fact`, `cluster-table`, `cluster-door-node` | the facts grid; one `cluster-fact` per fact with `data-fact` (`postgres`, `majority`, `verified-at`, `reachable`, `feed`, `policy`, `fairness`) and `data-value`; the per-coordinator table; one `cluster-door-node` column header per coordinator with `data-node` and `data-role`. A value that was not reported reads `unknown` (cells carry `data-unknown=true`) |
 | `feeder-open` | a building's name in its metering block; opens the Building details drawer |
+| `gateway-door-headline`, `gateway-door-table`, `gateway-door-col` | in the Building details drawer, only with standbys: the pair in words, the table of both gateways (Role, Session (first eight characters), Lease remaining, MQTT, Pending and Dropped readings; `—` where nothing fresh was reported) and one column header per gateway (`data-side` = `primary` or `standby`, `data-role` as on `gateway-primary`) |
+| `about-standby` | in the About drawer: the sentence on standby gateways (what they cover and the 12 to 15 s gap). Absent on a backend without standbys |
 | `feeder-door`, `feeder-door-close` | the Building details drawer |
 | `theme-switch`, `theme-auto`, `theme-light`, `theme-dark` | Appearance in the About drawer (radio group) |
 
@@ -100,7 +105,7 @@ Starting a gateway (breaker open to closed) acts at once on `feeder-breaker`, wi
 | id | where |
 |---|---|
 | `diagram` | the single-line diagram panel; `feeders` is its row of buildings |
-| `feeders`, `feeder-state`, `feeder-demand`, `feeder-reserved`, `tier-note` | the row of buildings and the parts inside each `feeder`. `feeder-breaker` is a `role=switch` (`aria-checked` = the gateway is running; closed breaker). `tier-note` reads "Steps down to <n> A" when the reservation has more than one tier |
+| `feeders`, `feeder-state`, `feeder-demand`, `feeder-reserved`, `tier-note` | the row of buildings and the parts inside each `feeder`. `feeder-breaker` is a `role=switch` (`aria-checked` = the gateway is running; closed breaker); with standbys it stops and starts the building's primary gateway only, and its question reads "Stop the primary gateway?". `tier-note` reads "Steps down to <n> A" when the reservation has more than one tier |
 | `cluster`, `cluster-node`, `vote-strip` | the Raft cluster drawing; `cluster-node` is one per coordinator (`data-node`, `data-role`, `data-leader`); `vote-strip` carries `data-pulse` (counts commits seen) and states the majority in words |
 | `council`, `applied-index`, `relay-cover`, `relay-control`, `relay-cancel` | the Coordinators table and its parts |
 | `majority-alarm` | appears only without a majority (`role=alert`) |
@@ -111,6 +116,17 @@ Starting a gateway (breaker open to closed) acts at once on `feeder-breaker`, wi
 | `overload`, `overload-policy`, `overload-policy-fair_share`, `overload-policy-first_come`, `overload-results` | the Overload test and its policy choice |
 | `sim`, `meters-rotary`, `active-meters`, `breaker-database`, `breaker-broker` | the Simulation tab; the two services are `role=switch` |
 | `tab-log`, `tab-tests`, `tab-sim` | see Dock |
+
+## Failure scenarios
+
+The four `scenario` cards keep their ids and order. Only `gateway-crash` changed meaning.
+
+| `data-scenario` | What the run does |
+|---|---|
+| `leader-failover` | stops the elected Raft leader, waits for a new leader, restarts it |
+| `majority-loss` | stops two of three coordinators, restarts both |
+| `gateway-crash` | **With standbys** (the overview has `standbys`): confirms every gateway answers and Hamra has one gateway serving and one on standby; stops the Hamra gateway that is serving (the primary the first time, the standby after a takeover has left it serving); waits, at most 45 s, until the other Hamra gateway reports `serving`; restarts the stopped one and waits, at most 45 s, until every gateway answers and the restarted one reports `standby`. Observed events gain `standby_took_over`. **Without standbys** (an older backend): the earlier three steps, stop the Hamra gateway, let its lease lapse, restart it. Either way it restores what it stopped on completion, timeout, cancel and navigation |
+| `database-outage` | stops PostgreSQL, restarts it |
 
 ## Conventions
 

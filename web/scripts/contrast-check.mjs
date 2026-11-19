@@ -26,6 +26,7 @@ const pairs=[
  ['line-strong','surface',3,'control borders on a panel'],['line-strong','sheet',3,'control borders on the sheet'],
  ['accent','surface',3,'energised line and focus ring'],['green','surface',3,'status symbol: ok'],['amber','surface',3,'status symbol: warning'],['red','surface',3,'status symbol: fault'],
  ['wire-off','surface',3,'de-energised line'],['ink-2','surface',3,'dimension lines and gauge ticks'],
+ ['accent-text','surface-2',4.5,'gateway strip: served by standby'],['accent','surface-2',3,'gateway strip: takeover stripe'],['amber','surface-2',3,'gateway strip: warning stripe'],['red','surface-2',3,'gateway strip: fault stripe'],['line-strong','surface-2',3,'gateway strip: neutral stripe'],
 ];
 let bad=0;
 for(const [name,theme] of [['light',light],['dark',dark]]){

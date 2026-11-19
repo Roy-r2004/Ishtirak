@@ -27,8 +27,8 @@ export function CapacityPanel({ grid, lab, chartOpen, onOpenChart }: { grid: Gri
 
   const ticks = useMemo(() => buildTicks(capacity, 10, 10, 20), [capacity])
   const limitAngle = valueToAngle(capacity, capacity), a0 = valueToAngle(0, capacity), a1 = valueToAngle(stop, capacity)
-  const figures = capacityFigures({ fresh: !grid.stale && !!grid.data, capacity: fresh ? c?.capacity_amps : undefined, reserved: fresh ? c?.granted_amps : undefined, buildings: grid.buildings }), partial = coverage(figures)
-  const delivery = deliverySummary({ fresh: !grid.stale && !!grid.data, quorum: grid.quorum, reachable: grid.nodes.filter(n => n.online).length, totalNodes: grid.nodes.length, buildings: grid.buildings })
+  const figures = capacityFigures({ fresh: !grid.stale && !!grid.data, capacity: fresh ? c?.capacity_amps : undefined, reserved: fresh ? c?.granted_amps : undefined, buildings: grid.active }), partial = coverage(figures)
+  const delivery = deliverySummary({ fresh: !grid.stale && !!grid.data, quorum: grid.quorum, reachable: grid.nodes.filter(n => n.online).length, totalNodes: grid.nodes.length, buildings: grid.active })
   const fairnessAvailable = fresh && delivery.state === 'usable'
   const words = describeReading({ value: shown, capacity: fresh || shown !== null ? capacity : null, peak: peakValue, fresh, violations: lab.peak.violations })
   const parked = !fresh

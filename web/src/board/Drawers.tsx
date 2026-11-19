@@ -1,11 +1,12 @@
 import { useState, type ReactNode } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { names, districts, num, time, type Grid } from '../data'
-import { OVERLOAD, overload, scenarios } from '../lab/scenarios'
+import { names, districts, num, time, type Building, type Grid, type Source } from '../data'
+import { OVERLOAD, forBackend, overload, scenarios } from '../lab/scenarios'
 import { describeTiers, tiersOf } from './tiers'
 import { filterAudit, kindFilters, kindText, ledgerCaption } from './ledger-logic'
 import { clusterFacts, nodeRows } from './cluster-details'
-import { Segmented } from './controls'
+import { Segmented, Status } from './controls'
+import { activeSource, shortSession, type PairView } from './standby-logic'
 import type { Theme } from './console-logic'
 
 /** A right-side drawer: a modal dialog, so focus is trapped inside, Escape closes it and focus returns to the control that opened it. */
@@ -24,16 +25,49 @@ function Drawer({ open, onClose, title, description, restore, closeLabel = 'Clos
 
 /** Everything the building dialog always showed, plus the reservation's tiers. */
 export function BuildingDrawer({ grid, id, onClose, restore }: { grid: Grid; id: string | null; onClose: () => void; restore: () => void }) {
-  const b = grid.buildings.find(x => x.id === id), d = b?.data, lease = grid.cluster?.leases.find(l => l.building_id === id), tiers = tiersOf(lease)
+  // With standby gateways the figures come from the gateway that serves the building (the primary unless the standby serves).
+  const primary = grid.buildings.find(x => x.id === id), standby = grid.standbys?.find(x => x.id === id), pair = id ? grid.pairs?.[id] ?? null : null
+  const b = primary && pair ? activeSource(primary, standby, pair) : primary, d = b?.data, lease = grid.cluster?.leases.find(l => l.building_id === id), tiers = tiersOf(lease)
   const rows: [string, string][] = [['Requested demand', `${num(d?.demand_amps, 1)} A`], ['Served demand', `${num(d?.served_amps, 1)} A`], ['Lease version', num(d?.lease_version)], ['Readings received', num(d?.readings_total)], ['Pending storage', num(d?.pending_readings)], ['Dropped readings', num(d?.dropped_readings)]]
   return <Drawer open={!!id} onClose={onClose} restore={restore} testId="feeder-door" title={id ? names[id] ?? id : ''} description="Latest observed gateway state. Lease authority remains in the Raft ledger.">
     {b && <>
       <dl className="kv-grid">{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd className="mono">{v}</dd></div>)}</dl>
       <p className="drawer-note"><b>Ledger reservation.</b> {describeTiers(tiers)}</p>
-      <p className="drawer-note">{grid.stale ? 'These observations are stale.' : b.online ? `The ${districts[b.id] ?? b.id} gateway is responding to the latest health check.` : 'The gateway is unavailable. Its last observations may no longer apply.'}</p>
-      {d?.last_error && <p className="banner banner-red" role="status">{d.last_error}</p>}
+      {pair && primary ? <GatewayTable grid={grid} id={b.id} pair={pair} primary={primary} standby={standby} /> : <>
+        <p className="drawer-note">{grid.stale ? 'These observations are stale.' : b.online ? `The ${districts[b.id] ?? b.id} gateway is responding to the latest health check.` : 'The gateway is unavailable. Its last observations may no longer apply.'}</p>
+        {d?.last_error && <p className="banner banner-red" role="status">{d.last_error}</p>}
+      </>}
     </>}
   </Drawer>
+}
+
+/** Both gateways of a building side by side: who serves, then each one's session, lease, broker link and reading queue. A value that was not reported reads as an em dash. */
+function GatewayTable({ grid, id, pair, primary, standby }: { grid: Grid; id: string; pair: PairView; primary: Source<Building>; standby: Source<Building> | undefined }) {
+  const cols = [{ g: pair.primary, src: primary }, { g: pair.standby, src: standby }]
+  const elapsed = Math.max(0, grid.now - grid.lastSeen)
+  const reported = (c: (typeof cols)[number]) => !grid.stale && c.src?.online && !!c.src.data
+  const rows: [string, (c: (typeof cols)[number]) => string][] = [
+    ['Session', c => reported(c) ? shortSession(c.src?.data?.session_id) : '—'],
+    ['Lease remaining', c => !reported(c) ? '—' : c.g.state === 'serving' ? `${(Math.max(0, c.src!.data!.lease_remaining_ms - elapsed) / 1000).toFixed(1)} s` : 'No lease'],
+    ['MQTT', c => !reported(c) ? '—' : c.src!.data!.mqtt_connected ? 'Connected' : 'Down'],
+    ['Pending readings', c => reported(c) ? num(c.src!.data!.pending_readings) : '—'],
+    ['Dropped readings', c => reported(c) ? num(c.src!.data!.dropped_readings) : '—'],
+  ]
+  return <>
+    <h3 className="drawer-sub">Gateways</h3>
+    <p className="drawer-note" data-testid="gateway-door-headline"><b>{pair.headline}.</b> {pair.detail}{grid.stale ? ' These observations are stale.' : ''}</p>
+    <div className="table-scroll table-door">
+      <table className="grid-table cluster-table" data-testid="gateway-door-table">
+        <caption className="sr">The primary and standby gateways of {districts[id] ?? id} as last reported</caption>
+        <thead><tr><td />{cols.map(c => <th scope="col" key={c.g.side} data-testid="gateway-door-col" data-side={c.g.side} data-role={c.g.state}>{c.g.name}</th>)}</tr></thead>
+        <tbody>
+          <tr><th scope="row">Role</th>{cols.map(c => <td key={c.g.side} data-field="Role"><Status tone={c.g.tone} label={c.g.word} /></td>)}</tr>
+          {rows.map(([name, pick]) => { const values = cols.map(pick); return <tr key={name}><th scope="row">{name}</th>{values.map((v, i) => <td key={cols[i].g.side} data-field={name} data-unknown={v === '—'} className="mono">{v}</td>)}</tr> })}
+        </tbody>
+      </table>
+    </div>
+    {cols.map(c => c.src?.data?.last_error && !grid.stale ? <p key={c.g.side} className={c.g.state === 'standby' ? 'drawer-note' : 'banner banner-red'} role="status"><b>{c.g.name} gateway.</b> {c.src.data.last_error}</p> : null)}
+  </>
 }
 
 /** The complete allocation log: every event the coordinators still hold (up to 100), newest first, with search, a kind filter and the JSON export. */
@@ -81,7 +115,7 @@ export function ClusterDrawer({ grid, open, onClose, restore }: { grid: Grid; op
   </Drawer>
 }
 
-export function AboutDrawer({ open, onClose, restore, demo, theme, onTheme }: { open: boolean; onClose: () => void; restore: () => void; demo: boolean; theme: Theme; onTheme: (t: Theme) => void }) {
+export function AboutDrawer({ open, onClose, restore, demo, theme, onTheme, legacy }: { open: boolean; onClose: () => void; restore: () => void; demo: boolean; theme: Theme; onTheme: (t: Theme) => void; legacy: boolean }) {
   return <Drawer open={open} onClose={onClose} restore={restore} wide testId="help-dialog" closeTestId="help-close" title="About this system" description="Meters publish readings over MQTT. Each building asks for a budget. Three coordinators use Raft to agree before a grant becomes official.">
     <div className="notes">
       <p className="banner banner-blue"><b>The one rule.</b> Total reserved amps never exceed the generator capacity, even while parts fail.</p>
@@ -94,7 +128,8 @@ export function AboutDrawer({ open, onClose, restore, demo, theme, onTheme }: { 
       <h3>Reading the console</h3>
       <ul>
         <li>The diagram shows the generator, the bus and the three buildings. Line weight and the label beside each line give the amps reserved for it.</li>
-        <li>A filled square means the gateway process is running; an empty one means it is stopped. This control starts or stops the gateway. A running gateway still needs a valid grant to serve demand.</li>
+        <li>A filled square means the gateway process is running; an empty one means it is stopped. This control starts or stops the {legacy ? '' : 'primary '}gateway. A running gateway still needs a valid grant to serve demand.</li>
+        {!legacy && <li data-testid="about-standby">Each building has a primary and a standby gateway. If the serving one stops, the standby takes over once the lease lapses, a gap of about 12 to 15 seconds without service for that building. This covers gateway failure only: the MQTT broker and PostgreSQL still have no failover.</li>}
         <li>The stepped bar in each building shows its reservation by tier. It shortens as older tiers expire and the reservation falls to current demand.</li>
         <li>Currently served is simulated delivery reported by gateways. The gauge shows capacity held in the ledger, which may remain above zero after service stops. Releasing it needs a majority and a committed safe expiry. The marker is the highest fresh reservation since the console opened.</li>
         <li>Every status has a symbol and a word. If data stops arriving the gauge parks and says so.</li>
@@ -103,7 +138,7 @@ export function AboutDrawer({ open, onClose, restore, demo, theme, onTheme }: { 
       <h3>Failure tests</h3>
       <p>Each test asks for confirmation, stops services in the local project, observes the effect and restores everything it changed.</p>
       <dl className="notes-tests">
-        {scenarios.map(s => <div key={s.id}><dt>{s.title}</dt><dd>{s.blurb}</dd></div>)}
+        {scenarios.map(base => { const s = forBackend(base, legacy); return <div key={s.id}><dt>{s.title}</dt><dd>{s.blurb}</dd></div> })}
         <div><dt>{overload.title}</dt><dd>{overload.blurb} The load is raised to {OVERLOAD.peak.meter_count} meters for {OVERLOAD.peakMs / 1000} s.</dd></div>
       </dl>
       <h3>Appearance</h3>

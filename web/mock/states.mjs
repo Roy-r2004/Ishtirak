@@ -4,8 +4,14 @@ export const CAPACITY = 120
 export const COORD = ['coordinator1', 'coordinator2', 'coordinator3']
 export const IDS = ['hamra', 'mar_mikhael', 'achrafieh']
 export const NAMES = { hamra: 'Hamra Residence', mar_mikhael: 'Mar Mikhael House', achrafieh: 'Achrafieh Gardens' }
-export const PRESET_NAMES = ['healthy', 'hog', 'node-down', 'leader-down', 'stale', 'majority-lost', 'majority-expired', 'gateway-down', 'violation', 'db-down', 'broker-down']
+export const PRESET_NAMES = ['healthy', 'hog', 'node-down', 'leader-down', 'stale', 'majority-lost', 'majority-expired', 'gateway-down', 'violation', 'db-down', 'broker-down', 'standby-serving', 'standby-swapped', 'no-standby']
 
+/** A deterministic stand-in for a gateway's session UUID (the console shows its first group). */
+export function sessionId(building, side, n) {
+  let h = 2166136261
+  for (const c of `${building}/${side}/${n}`) h = Math.imul(h ^ c.charCodeAt(0), 16777619)
+  return `${(h >>> 0).toString(16).padStart(8, '0')}-0000-4000-8000-${String(n).padStart(12, '0')}`
+}
 const amps = (a, b, c) => ({ hamra: a, mar_mikhael: b, achrafieh: c })
 const shares = (a, b, c) => IDS.map((id, i) => ({ building_id: id, amps: [a, b, c][i] }))
 
@@ -31,7 +37,12 @@ export function buildState(name, now) {
     meters: { count: 50, factor: 1, mqtt: true, published: 48210 },
     postgres: true, dbDownAt: 0, pendingBase: 0, pendingGrows: false,
     quorumLostAt: null, remainingAtLoss: {}, quorumVerifiedAt: now,
-    gateways: Object.fromEntries(IDS.map((id, i) => [id, { online: true, epoch: 0, readings: 2000 + i * 300, dropped: 0 }])),
+    gateways: Object.fromEntries(IDS.map((id, i) => [id, { online: true, epoch: 0, readings: 2000 + i * 300, dropped: 0, sessions: 1 }])),
+    // Every building has a standby gateway beside its primary; `serving` says which of the two the ledger lease belongs to. With
+    // standbyEnabled false the mock answers like the older backend: no `standbys` key and no `role`.
+    standbyEnabled: true,
+    standbys: Object.fromEntries(IDS.map((id, i) => [id, { online: true, epoch: 0, readings: 1900 + i * 300, dropped: 0, sessions: 1 }])),
+    serving: Object.fromEntries(IDS.map(id => [id, 'primary'])),
     base: amps(28, 22, 19.5),
     leases: { hamra: [{ version: 7, amps: 31 }, { version: 9, amps: 26 }], mar_mikhael: [{ version: 8, amps: 24 }], achrafieh: [{ version: 6, amps: 22 }] },
     leaseBase: {},
@@ -53,7 +64,10 @@ export function buildState(name, now) {
       S.nodes.coordinator2.online = false; S.nodes.coordinator3.online = false; S.leaderId = null
       S.quorumLostAt = name === 'majority-expired' ? now - 20000 : now; S.remainingAtLoss = amps(12000, 12000, 12000)
       break
-    case 'gateway-down': S.gateways.hamra.online = false; break
+    case 'gateway-down': S.gateways.hamra.online = false; break // the primary stopped, its lease still held: the standby is waiting to take over
+    case 'standby-serving': S.gateways.hamra.online = false; S.serving.hamra = 'standby'; break // the primary is stopped and the standby serves Hamra
+    case 'standby-swapped': S.serving.hamra = 'standby'; break // the primary came back as the standby and the standby keeps serving
+    case 'no-standby': S.standbyEnabled = false; break // an older backend
     case 'violation': // synthetic: the leader reports 124 A granted against 120 A capacity, to exercise the red limit lamp. Not a real system state.
       S.policyFair = false; S.jitter = 0.5; S.base = amps(48, 38, 32)
       S.leases = { hamra: [{ version: 5, amps: 50 }], mar_mikhael: [{ version: 5, amps: 40 }], achrafieh: [{ version: 5, amps: 34 }] }

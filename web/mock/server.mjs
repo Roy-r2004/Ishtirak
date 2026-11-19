@@ -5,12 +5,14 @@ import http from 'node:http'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import { CAPACITY, COORD, IDS, NAMES, PRESET_NAMES, buildState } from './states.mjs'
+import { CAPACITY, COORD, IDS, NAMES, PRESET_NAMES, buildState, sessionId } from './states.mjs'
 
 const PORT = Number(process.env.PORT || 8099)
 const ROOT = path.resolve(process.env.STATIC_DIR || path.join(import.meta.dirname, '../dist'))
 const LOG = process.env.MOCK_LOG === '1'
-const SERVICES = [...COORD, 'gateway-hamra', 'gateway-mar-mikhael', 'gateway-achrafieh', 'postgres', 'mosquitto']
+const SERVICES = [...COORD, 'gateway-hamra', 'gateway-mar-mikhael', 'gateway-achrafieh', 'gateway-hamra-standby', 'gateway-mar-mikhael-standby', 'gateway-achrafieh-standby', 'postgres', 'mosquitto']
+/** How long after the serving gateway stops the mock hands the building to its standby. The real stack needs about 12 to 15 s; the mock is quicker so scripts stay fast. */
+const TAKEOVER_MS = 4000
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
 
 let S = buildState('healthy', Date.now())
@@ -65,29 +67,36 @@ function remainingFor(id, i, t) {
   if (S.quorumLostAt !== null) return Math.max(0, (S.remainingAtLoss[id] ?? 12000) - (t - S.quorumLostAt)) // no renewals without a majority
   return 12000 - ((t + i * 1000) % 3000) // renewed every 3 s
 }
-function buildingSource(id, i, t) {
-  const gw = S.gateways[id]
+const gatewayOf = (id, side) => side === 'primary' ? S.gateways[id] : S.standbys[id]
+const otherSide = side => side === 'primary' ? 'standby' : 'primary'
+function gatewaySource(side, id, i, t) {
+  const gw = gatewayOf(id, side)
   if (!gw.online) return { id, online: false, error: 'connection refused' }
+  const holds = !S.standbyEnabled || S.serving[id] === side // the gateway the ledger lease belongs to (the primary on an older backend)
   const lease = leasesNow(t).find(l => l.building_id === id), scale = (S.meters.count / 50) * S.meters.factor
   const demand = Math.max(0, round1(S.base[id] * scale + jitter(id, t) * S.jitter * Math.min(scale, 1.5)))
   const remaining = remainingFor(id, i, t)
-  let granted = lease ? lease.amps : 0, served = 0, state = 'waiting'
-  if (lease && remaining <= 0) { granted = 0; state = 'expired' }
-  else if (lease) { served = Math.min(demand, granted); state = demand > granted + 0.05 ? 'limited' : 'active' }
+  let granted = holds && lease ? lease.amps : 0, served = 0, state = 'waiting'
+  if (holds && lease && remaining <= 0) { granted = 0; state = 'expired' }
+  else if (holds && lease) { served = Math.min(demand, granted); state = demand > granted + 0.05 ? 'limited' : 'active' }
+  // serving = a live lease; a gateway whose lease belongs to the other session stands by while the ledger answers; anything else waits
+  const role = state === 'active' || state === 'limited' ? 'serving' : !holds && lease && hasQuorum() ? 'standby' : 'waiting'
   const growth = S.pendingGrows ? Math.floor((t - S.dbDownAt) / 1000) * 2 : 0
   return {
     id, online: true, data: {
       building_id: id, name: NAMES[id], meter_count: splitMeters(S.meters.count)[i], demand_amps: demand, served_amps: round1(served), granted_amps: granted,
-      lease_remaining_ms: remaining, lease_version: lease ? lease.version : 0, state, mqtt_connected: S.meters.mqtt,
+      lease_remaining_ms: holds ? remaining : 0, lease_version: holds && lease ? lease.version : 0, state, mqtt_connected: S.meters.mqtt, session_id: sessionId(id, side, gw.sessions),
       pending_readings: S.postgres ? 0 : S.pendingBase + growth, dropped_readings: gw.dropped, readings_total: gw.readings,
-      last_error: !S.meters.mqtt ? 'MQTT broker connection lost; retrying.' : !S.postgres ? 'Readings are queued while PostgreSQL is unavailable.' : '',
+      last_error: !S.meters.mqtt ? 'MQTT broker connection lost; retrying.' : !S.postgres ? 'Readings are queued while PostgreSQL is unavailable.' : role === 'standby' ? 'building_session_active: another gateway session holds this building' : '',
+      ...(S.standbyEnabled ? { role } : {}),
     },
   }
 }
 function overview(t) {
   return {
     nodes: COORD.map(id => S.nodes[id].online ? { id, online: true, data: nodeData(id, t) } : { id, online: false, error: 'connection refused' }),
-    buildings: IDS.map((id, i) => buildingSource(id, i, t)),
+    buildings: IDS.map((id, i) => gatewaySource('primary', id, i, t)),
+    ...(S.standbyEnabled ? { standbys: IDS.map((id, i) => gatewaySource('standby', id, i, t)) } : {}),
     meters: { id: 'meters', online: true, data: { meter_count: S.meters.count, demand_factor: S.meters.factor, mqtt_connected: S.meters.mqtt, published_readings: S.meters.published } },
     observed_at: iso(t), demo_enabled: true,
   }
@@ -140,13 +149,16 @@ function applyAction(service, action) {
     if (stop) { n.online = false; reconcile() }
     else if (!n.online) schedule(1500, () => { if (n.epoch !== ep) return; n.online = true; reconcile() })
   } else if (service.startsWith('gateway-')) {
-    const id = service.slice(8).replaceAll('-', '_'), gw = S.gateways[id], ep = ++gw.epoch
+    const m = /^gateway-(.+?)(-standby)?$/.exec(service), id = m[1].replaceAll('-', '_'), side = m[2] ? 'standby' : 'primary', gw = gatewayOf(id, side), partner = gatewayOf(id, otherSide(side)), ep = ++gw.epoch
     if (stop) {
       gw.online = false
-      if (S.leases[id]) schedule(12000, () => { if (gw.epoch !== ep || gw.online) return; if (!hasQuorum()) return 1000; reclaim(id) })
+      const handsOver = () => S.standbyEnabled && partner.online
+      // The serving gateway stopped. Its lease lapses; if the other gateway runs it is then granted the building, otherwise the building is reclaimed.
+      if (S.leases[id] && (!S.standbyEnabled || S.serving[id] === side)) schedule(handsOver() ? TAKEOVER_MS : 12000, () => { if (gw.epoch !== ep || gw.online) return; if (!hasQuorum()) return 1000; reclaim(id); if (handsOver()) { S.serving[id] = otherSide(side); grant(id) } })
     } else {
-      gw.online = true
-      if (!S.leases[id]) schedule(1500, () => { if (gw.epoch !== ep || !gw.online) return; if (!hasQuorum()) return 1000; grant(id) })
+      gw.online = true; gw.sessions++ // a new session
+      // With the lease held by the other gateway it returns as the standby; with no lease it asks for one and is granted it.
+      if (!S.leases[id]) schedule(1500, () => { if (gw.epoch !== ep || !gw.online) return; if (!hasQuorum()) return 1000; S.serving[id] = side; grant(id) })
     }
   } else if (service === 'postgres') {
     if (stop && S.postgres) { S.postgres = false; S.dbDownAt = Date.now(); S.pendingBase = 0; S.pendingGrows = true }
@@ -159,7 +171,7 @@ function tick() {
   if (hasQuorum()) { S.quorumVerifiedAt = t; if (S.tickN % 4 === 0) commit() } // a visible commit about every 4 s
   const split = splitMeters(S.meters.count)
   if (S.meters.mqtt) S.meters.published += S.meters.count
-  IDS.forEach((id, i) => { const gw = S.gateways[id]; if (gw.online && S.meters.mqtt) gw.readings += split[i] })
+  IDS.forEach((id, i) => { for (const gw of [S.gateways[id], S.standbys[id]]) if (gw.online && S.meters.mqtt) gw.readings += split[i] })
 }
 function applyPreset(name) {
   S = buildState(name, Date.now())
@@ -214,7 +226,7 @@ const server = http.createServer(async (req, res) => {
       let b; try { b = await readJson(req) } catch (e) { return json(res, 400, { error: e.message }) }
       if (b === null || typeof b !== 'object') return json(res, 400, { error: 'Body must be a JSON object' })
       if (p === '/api/actions') {
-        if (!SERVICES.includes(b.service)) return json(res, 400, { error: `Unknown service ${JSON.stringify(b.service)}` })
+        if (!SERVICES.includes(b.service) || (b.service.endsWith('-standby') && !S.standbyEnabled)) return json(res, 400, { error: `Unknown service ${JSON.stringify(b.service)}` })
         if (b.action !== 'stop' && b.action !== 'start') return json(res, 400, { error: 'action must be stop or start' })
         applyAction(b.service, b.action)
       } else if (p === '/api/meters/config') {

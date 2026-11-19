@@ -5,6 +5,7 @@ import { Glyph, Status, TwoStep } from './controls'
 import { CLUSTER_SIZE, breakerText, clusterGeometry, feederStatus, lineWeight, nodeStatus, voteSummary, wireState } from './console-logic'
 import { describeTiers, tierSegments, tiersOf } from './tiers'
 import { deliverySummary, gatewayDelivery } from './delivery'
+import { activeSource, type PairView } from './standby-logic'
 
 const wire = (amps: number | null, capacity: number): CSSProperties => ({ ['--w' as string]: `${lineWeight(amps, capacity)}px` })
 
@@ -30,8 +31,18 @@ function Bar({ capacity, demand, fair, tiers, dim }: { capacity: number; demand:
   </div>
 }
 
+/** A building's gateways: who serves in words, then the primary and the standby, each a symbol and a word. Drawn only when the backend runs standby gateways. */
+function GatewayPair({ id, view }: { id: string; view: PairView }) {
+  return <div className="gateways" data-testid="gateway-pair" data-building={id} data-serving={view.serving} data-takeover={view.takeover} data-tone={view.tone} role="group" aria-label={`Gateways, ${districts[id] ?? id}. ${view.headline}. ${view.detail}`}>
+    <div className="gw-head"><div className="gw-title">Gateways</div><Status tone={view.tone} label={view.headline} testId="gateway-headline" /></div>
+    <dl className="gw-rows">{[view.primary, view.standby].map(g => <div key={g.side} className="gw-row" data-testid={`gateway-${g.side}`} data-role={g.state} data-online={g.online}><dt>{g.name}</dt><dd><Status tone={g.tone} label={g.word} /></dd></div>)}</dl>
+    <p className="gw-note" aria-hidden="true">{view.detail}</p>
+  </div>
+}
+
 function Feeder({ grid, id, capacity, enabled, onOpen }: { grid: Grid; id: string; capacity: number; enabled: boolean; onOpen: (id: string, trigger: HTMLElement) => void }) {
-  const c = grid.cluster, b = grid.buildings.find(x => x.id === id)!, d = b.data
+  // `primary` is the gateway the breaker controls. `b` is the gateway whose figures describe the building: the standby once it serves, otherwise the primary (and always the primary on a backend without standbys).
+  const c = grid.cluster, primary = grid.buildings.find(x => x.id === id)!, pair = grid.pairs?.[id] ?? null, b = pair ? activeSource(primary, grid.standbys?.find(x => x.id === id), pair) : primary, d = b.data
   const ids = grid.buildings.map(x => x.id), row = shareRows(ids, c?.wants, c?.leases, c?.fair_shares)[ids.indexOf(id)]
   const lease = c?.leases.find(l => l.building_id === id), tiers = tiersOf(lease)
   const remaining = Math.max(0, (d?.lease_remaining_ms ?? 0) - Math.max(0, grid.now - grid.lastSeen))
@@ -43,19 +54,19 @@ function Feeder({ grid, id, capacity, enabled, onOpen }: { grid: Grid; id: strin
   const wireTone = wireState({ online: b.online, stale: delivery === 'unknown', reserved: delivery === 'usable' ? d!.granted_amps : 0 })
   const lock = !enabled ? 'Controls are switched off.' : grid.busy ? 'Another action is in progress.' : ''
   const busy = grid.busy.endsWith(service)
-  return <article className="feeder" data-testid="feeder" data-building={id} data-state={status.label} data-stale={grid.stale} data-online={b.online}>
+  return <article className="feeder" data-testid="feeder" data-building={id} data-state={status.label} data-stale={grid.stale} data-online={primary.online}>
     <div className="drop" data-wire={wireTone} style={wire(reserved, capacity)}><span className="dim mono">{reserved === null ? '—' : `${num(reserved)} A`}</span></div>
     <div className="breaker-slot">
-      <TwoStep className="breaker" question="Stop gateway?" confirm={b.online} disabled={!!lock} reason={lock || (b.online ? 'Stop the gateway' : 'Start the gateway')} armTestId="feeder-breaker" confirmTestId="feeder-breaker-confirm" cancelTestId="feeder-breaker-cancel" promptClass="prompt-pop"
-        armProps={{ role: 'switch', 'aria-checked': b.online, 'aria-label': `Gateway process, ${district}`, 'data-busy': busy }} onConfirm={() => grid.act(service, b.online ? 'stop' : 'start')}>
-        <BreakerSymbol closed={b.online} /><span className="breaker-text">{breakerText(b.online)}</span>
+      <TwoStep className="breaker" question={pair ? 'Stop the primary gateway?' : 'Stop gateway?'} confirm={primary.online} disabled={!!lock} reason={lock || (primary.online ? `Stop the ${pair ? 'primary ' : ''}gateway` : `Start the ${pair ? 'primary ' : ''}gateway`)} armTestId="feeder-breaker" confirmTestId="feeder-breaker-confirm" cancelTestId="feeder-breaker-cancel" promptClass="prompt-pop"
+        armProps={{ role: 'switch', 'aria-checked': primary.online, 'aria-label': `${pair ? 'Primary gateway process' : 'Gateway process'}, ${district}`, 'data-busy': busy }} onConfirm={() => grid.act(service, primary.online ? 'stop' : 'start')}>
+        <BreakerSymbol closed={primary.online} /><span className="breaker-text">{breakerText(primary.online)}</span>
       </TwoStep>
     </div>
     <div className="stub" data-wire={wireTone} style={wire(reserved, capacity)} />
     <div className="meter-block">
       <div className="meter-head">
         <button type="button" className="name-link" data-testid="feeder-open" aria-label={`Open details for ${name}`} onClick={e => onOpen(id, e.currentTarget)}>{name}</button>
-        <Status tone={status.tone} label={status.label === 'Lease expired' ? 'Lease expired — no service' : status.label} testId="feeder-state" />
+        <Status tone={status.tone} label={status.label === 'Lease expired' ? 'Lease expired — no service' : status.label} detail={pair?.takeover ? 'via standby' : undefined} testId="feeder-state" />
       </div>
       <Bar capacity={capacity} demand={b.online && d ? d.demand_amps : null} fair={fair} tiers={tiers} dim={grid.stale} />
       <div className="bar-ends mono" aria-hidden="true"><span>0</span><span>{num(capacity)} A</span></div>
@@ -73,6 +84,7 @@ function Feeder({ grid, id, capacity, enabled, onOpen }: { grid: Grid; id: strin
         <div><dt>Dropped</dt><dd className="mono">{b.online ? num(d?.dropped_readings) : '—'}</dd></div>
       </dl>
       <p className="mqtt"><Glyph tone={b.online && d?.mqtt_connected ? 'ok' : 'off'} /> {b.online ? (d?.mqtt_connected ? 'MQTT connected' : 'MQTT down') : 'No readings'}</p>
+      {pair && <GatewayPair id={id} view={pair} />}
     </div>
   </article>
 }
@@ -123,7 +135,7 @@ function Cluster({ grid, onOpenCluster }: { grid: Grid; onOpenCluster: (trigger:
 
 export function Diagram({ grid, enabled, onOpenBuilding, onOpenCluster }: { grid: Grid; enabled: boolean; onOpenBuilding: (id: string, trigger: HTMLElement) => void; onOpenCluster: (trigger: HTMLElement) => void }) {
   const c = grid.cluster, capacity = c?.capacity_amps ?? 120, total = c ? c.granted_amps : null, uid = useId().replace(/:/g, '')
-  const delivery = deliverySummary({ fresh: !grid.stale && !!grid.data, quorum: grid.quorum, reachable: grid.nodes.filter(n => n.online).length, totalNodes: grid.nodes.length, buildings: grid.buildings })
+  const delivery = deliverySummary({ fresh: !grid.stale && !!grid.data, quorum: grid.quorum, reachable: grid.nodes.filter(n => n.online).length, totalNodes: grid.nodes.length, buildings: grid.active })
   const busWire = wireState({ online: true, stale: delivery.state === 'unknown', reserved: delivery.state === 'usable' ? 1 : 0 })
   return <section className="panel diagram" aria-labelledby={`${uid}-t`} data-testid="diagram">
     <header className="panel-head"><h2 id={`${uid}-t`}>Buildings</h2><span className="muted">Line width shows held capacity; colour follows valid grants. Observed {grid.lastSeen ? time(grid.lastSeen) : 'never'}.</span></header>
