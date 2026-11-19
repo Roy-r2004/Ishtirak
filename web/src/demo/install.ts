@@ -127,7 +127,7 @@ export class DemoWebSocket extends EventTarget {
 /** Switch the page to the simulator. Idempotent. */
 export function installDemo(): void {
   if (active) return
-  sim = createSimulator({})
+  sim = createSimulator({ standbys: true })
   active = true
   globalThis.fetch = demoFetch as typeof fetch
   if (NativeWebSocket) {

@@ -1,15 +1,15 @@
 import { time, num, type Grid } from '../data'
 import { policyLabel, percent, type Policy } from '../lab/fairness'
-import { OVERLOAD, scenarios, type RunState, type Scenario, type TimelineEvent } from '../lab/scenarios'
+import { OVERLOAD, forBackend, scenarios, type RunState, type Scenario, type TimelineEvent } from '../lab/scenarios'
 import type { Lab } from './use-lab'
 import { Segmented, TwoStep } from './controls'
 
-const kindLabel: Record<TimelineEvent['kind'], string> = { leader_elected: 'Leader observed', leader_lost: 'Leader lost', node_down: 'Unreachable', node_up: 'Reachable', quorum_lost: 'Majority lost', quorum_restored: 'Majority restored' }
+const kindLabel: Record<TimelineEvent['kind'], string> = { leader_elected: 'Leader observed', leader_lost: 'Leader lost', node_down: 'Unreachable', node_up: 'Reachable', quorum_lost: 'Majority lost', quorum_restored: 'Majority restored', standby_took_over: 'Standby took over' }
 const outcome: Record<RunState['status'], string> = { running: 'Running', restoring: 'Restoring services', done: 'Completed', timeout: 'Timed out', cancelled: 'Cancelled' }
 const effect: Record<string, string> = {
   'leader-failover': 'It stops the current leader and restores it afterwards.',
   'majority-loss': 'It stops two of the three coordinators and restores them afterwards.',
-  'gateway-crash': 'It stops the Hamra gateway and restores it afterwards.',
+  'gateway-crash': 'It stops the Hamra gateway that is serving, waits for its standby to take over, and restores it afterwards.',
   'database-outage': 'It stops PostgreSQL and restores it afterwards.',
   overload: `It sets the meters to ${OVERLOAD.peak.meter_count} for ${OVERLOAD.peakMs / 1000} s and restores the starting setup afterwards.`,
 }
@@ -17,9 +17,12 @@ const effect: Record<string, string> = {
 const summary: Record<string, string> = {
   'leader-failover': 'The remaining majority elects a replacement and keeps granting.',
   'majority-loss': 'Without a majority no new grants can commit.',
-  'gateway-crash': 'Its lease is not renewed and service stops at the safe deadline.',
+  'gateway-crash': 'Its standby takes over once the lease lapses, about 12 to 15 s.',
   'database-outage': 'Grants continue through Raft; audit writes catch up afterwards.',
 }
+/** What differs on a backend that reports no standby gateways: the wording of the one scenario that has a standby form. */
+const legacyEffect: Record<string, string> = { 'gateway-crash': 'It stops the Hamra gateway and restores it afterwards.' }
+const legacySummary: Record<string, string> = { 'gateway-crash': 'Its lease is not renewed and service stops at the safe deadline.' }
 const seconds = (ms: number) => `${Math.max(0, Math.round(ms / 1000))} s`
 const policies: Policy[] = ['fair_share', 'first_come']
 
@@ -39,6 +42,8 @@ export function FailureTests({ grid, lab }: { grid: Grid; lab: Lab }) {
   const lock = !enabled ? 'Controls are switched off on this controller.' : !fresh ? 'Needs fresh observations.' : running ? 'A scenario is running.' : grid.busy ? 'Another action is in progress.' : ''
   const startLock = !enabled ? 'Controls are switched off on this controller.' : !fresh ? 'Needs fresh observations.' : !leader ? 'Waiting for a verified leader.' : grid.policy === null ? 'The coordinators have not reported an allocation policy.' : !metersKnown ? 'The meter simulator is not reporting.' : running ? 'A scenario is running.' : grid.busy ? 'Another action is in progress.' : ''
   const mine = run?.id === 'overload', live = mine && run?.status === 'running'
+  // An overview without standbys (an older backend) gets the earlier gateway-crash wording and steps. Before any data arrives the current wording shows.
+  const legacy = !!grid.data && !grid.standbys
   const statusBody = run && current ? <>
     <div className="status-text">
       <strong>{current.title}: {pending && run.status !== 'running' && run.status !== 'restoring' ? `${outcome[run.status]}, restoring ${settings ? 'what this run changed' : 'services'}` : outcome[run.status]}</strong>
@@ -53,12 +58,12 @@ export function FailureTests({ grid, lab }: { grid: Grid; lab: Lab }) {
     <section className="tests-col" aria-label="Failure scenarios">
       <h3 className="col-title">Scenarios</h3>
       <div className="scenario-list" role="group" aria-label="Failure scenarios">
-        {scenarios.map(s => {
-          const isMine = run?.id === s.id, liveHere = isMine && running
+        {scenarios.map(base => {
+          const s = forBackend(base, legacy), isMine = run?.id === s.id, liveHere = isMine && running
           return <div className="scenario" key={s.id} data-testid="scenario" data-scenario={s.id} data-state={isMine ? run?.status : 'idle'}>
-            <div className="scenario-main"><strong>{s.title}</strong><span className="muted clamp" title={s.blurb}>{summary[s.id] ?? s.blurb}</span></div>
-            <Steps scenario={s} run={isMine ? run : null} />
-            <TwoStep className="btn" question={`Run ${s.title.toLowerCase()}? ${effect[s.id] ?? ''}`} disabled={!!lock} reason={lock || undefined} armTestId="scenario-cover" confirmTestId="scenario-run" cancelTestId="scenario-cancel" armProps={{ 'aria-label': `Run ${s.title}` }} onConfirm={() => lab.start(s)}>{liveHere ? 'Running' : 'Run'}</TwoStep>
+            <div className="scenario-main"><strong>{s.title}</strong><span className="muted clamp" title={s.blurb}>{(legacy ? legacySummary[s.id] : undefined) ?? summary[s.id] ?? s.blurb}</span></div>
+            <Steps scenario={isMine && current ? current : s} run={isMine ? run : null} />
+            <TwoStep className="btn" question={`Run ${s.title.toLowerCase()}? ${(legacy ? legacyEffect[s.id] : undefined) ?? effect[s.id] ?? ''}`} disabled={!!lock} reason={lock || undefined} armTestId="scenario-cover" confirmTestId="scenario-run" cancelTestId="scenario-cancel" armProps={{ 'aria-label': `Run ${s.title}` }} onConfirm={() => lab.start(s)}>{liveHere ? 'Running' : 'Run'}</TwoStep>
           </div>
         })}
       </div>

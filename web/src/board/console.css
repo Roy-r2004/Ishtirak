@@ -112,7 +112,7 @@
 .breaker:hover:not(:disabled) { background: var(--surface-2); }
 .breaker:disabled { color: var(--ink-3); }
 .stub { --wire: var(--wire-off); width: var(--w, 2px); height: 10px; margin: 0 auto; background: var(--wire); }
-.meter-block { margin: 0 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.meter-block { container-type: inline-size; --px: 10px; --py: 8px; margin: 0 6px; padding: var(--py) var(--px); display: flex; flex-direction: column; gap: 5px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
 .meter-head { display: flex; flex-direction: column; gap: 2px; }
 .name-link { align-self: flex-start; padding: 0; border: 0; background: none; color: var(--accent-text); font: 600 var(--t-md)/1.3 var(--f-sans); text-align: left; text-decoration: underline; text-underline-offset: 3px; }
 .bar { position: relative; height: 22px; }
@@ -142,6 +142,25 @@
 .facts dd { font: 500 var(--t-sm)/1.3 var(--f-mono); white-space: nowrap; }
 .facts .low dd { color: var(--amber); }
 .mqtt { display: flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: var(--t-xs); }
+/* gateway pair (only when the backend runs standby gateways): who serves in words, then the primary and the standby. The stripe says the
+   kind of state; the symbol and the words say what it is. The note keeps two lines so a takeover does not move anything. */
+.gateways { display: flex; flex-direction: column; gap: 2px; margin: 4px calc(-1 * var(--px)) calc(-1 * var(--py)); padding: 5px var(--px) 6px calc(var(--px) - 3px); border-top: 1px solid var(--line); border-left: 3px solid var(--line-strong); border-radius: 0 0 var(--r) var(--r); background: var(--surface-2); }
+.gateways[data-takeover='true'] { border-left-color: var(--accent); }
+.gateways[data-tone='warn'] { border-left-color: var(--amber); }
+.gateways[data-tone='fault'] { border-left-color: var(--red); }
+.gw-title { color: var(--ink-2); font-size: var(--t-xs); line-height: 1.3; }
+.gw-head .status { font-weight: 600; }
+.gateways[data-takeover='true'] .gw-head .status { color: var(--accent-text); }
+.gw-rows { display: flex; flex-direction: column; gap: 1px; }
+.gw-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.gw-row .status { white-space: nowrap; }
+.gw-row dt { color: var(--ink-2); font-size: var(--t-sm); }
+/* in a narrow metering block (a 1280 px window) the name goes above its status, and the chip drops its extra words, so the three buildings stay level */
+@container (max-width: 159px) {
+  .gw-row { flex-direction: column; align-items: flex-start; gap: 0; }
+  .meter-head .status small { display: none; }
+}
+.gw-note { min-height: calc(2 * 1.35em); color: var(--ink-2); font-size: var(--t-xs); line-height: 1.35; }
 .legend { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 4px 8px; margin-top: auto; padding-top: 8px; color: var(--ink-2); font-size: var(--t-xs); }
 .legend .key { margin-left: 8px; }
 
@@ -323,6 +342,7 @@
 .drawer-body { margin-top: 16px; display: flex; flex-direction: column; gap: 14px; }
 .drawer-note { color: var(--ink-2); font-size: var(--t-sm); max-width: 70ch; }
 .drawer-note b { color: var(--ink); font-weight: 600; }
+.drawer-sub { font: 600 var(--t-md)/1.3 var(--f-sans); margin-top: 4px; }
 .kv-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
 .kv-grid > div { padding: 8px 12px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .kv-grid dt { color: var(--ink-2); font-size: var(--t-xs); }
@@ -352,7 +372,7 @@
 }
 @media (max-width: 1279px) {
   .diagram-body { grid-template-columns: minmax(0, 1fr) 250px; }
-  .meter-block { padding: 8px; margin: 0 4px; }
+  .meter-block { --px: 8px; margin: 0 4px; }
   .facts { column-gap: 10px; }
   .facts dd { font-size: var(--t-xs); }
 }

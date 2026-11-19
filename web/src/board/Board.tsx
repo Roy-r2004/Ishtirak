@@ -24,7 +24,7 @@ export function Board() {
   const [tab, setTab] = useState<DockTab>('log'), [theme, setTheme] = useState<Theme>(() => readTheme(typeof localStorage === 'undefined' ? null : localStorage))
   const returnTo = useRef<HTMLElement | null>(null), aboutRef = useRef<HTMLButtonElement>(null), chartTrigger = useRef<HTMLElement | null>(null), previousTab = useRef<DockTab>('log')
   const enabled = !!grid.data?.demo_enabled, chartOpen = tab === 'chart', reachable = grid.nodes.filter(n => n.online).length
-  const delivery = deliverySummary({ fresh: !grid.stale && !!grid.data, quorum: grid.quorum, reachable, totalNodes: grid.nodes.length, buildings: grid.buildings })
+  const delivery = deliverySummary({ fresh: !grid.stale && !!grid.data, quorum: grid.quorum, reachable, totalNodes: grid.nodes.length, buildings: grid.active })
   // The trigger is remembered explicitly: Safari does not focus a button on click, so document.activeElement would be the body.
   const remember = (trigger: HTMLElement | null) => { returnTo.current = trigger }
   const restore = () => returnTo.current?.focus()
@@ -56,7 +56,7 @@ export function Board() {
       sim: <Simulation grid={grid} />,
       chart: <ChartPanel grid={grid} onClose={closeChart} />,
     }} />
-    <AboutDrawer open={about} onClose={() => setAbout(false)} restore={restore} demo={demo} theme={theme} onTheme={chooseTheme} />
+    <AboutDrawer open={about} onClose={() => setAbout(false)} restore={restore} demo={demo} theme={theme} onTheme={chooseTheme} legacy={!!grid.data && !grid.standbys} />
     <BuildingDrawer grid={grid} id={building} onClose={() => setBuilding(null)} restore={restore} />
     <FullLogDrawer grid={grid} open={logDrawer} onClose={() => setLogDrawer(false)} restore={restore} />
     <ClusterDrawer grid={grid} open={clusterDrawer} onClose={() => setClusterDrawer(false)} restore={restore} />

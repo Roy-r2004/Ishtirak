@@ -1,7 +1,10 @@
 import {fairnessScore, policyLabel, sumAmps, type MeterConfig, type Policy, type Share} from './fairness'
+import type {GatewayState} from '../data'
 
-export type Observation = {at:number; leader:string|null; nodesUp:string[]; buildingsUp:string[]; granted:number; capacity:number; quorum:boolean; stale:boolean; postgresUp?:boolean; policy?:Policy|null; meters?:MeterConfig|null; wants?:Share[]; reserved?:Share[]}
-export type TimelineEvent = {at:number; kind:'leader_elected'|'leader_lost'|'node_down'|'node_up'|'quorum_lost'|'quorum_restored'; detail:string}
+export type Observation = {at:number; leader:string|null; nodesUp:string[]; buildingsUp:string[]; granted:number; capacity:number; quorum:boolean; stale:boolean; postgresUp?:boolean;
+ /** Per building, what each gateway of its pair reported. Absent when the backend runs no standby gateways (older stacks). */
+ pairs?:Record<string,{primary:GatewayState; standby:GatewayState}>; policy?:Policy|null; meters?:MeterConfig|null; wants?:Share[]; reserved?:Share[]}
+export type TimelineEvent = {at:number; kind:'leader_elected'|'leader_lost'|'node_down'|'node_up'|'quorum_lost'|'quorum_restored'|'standby_took_over'; detail:string}
 export type ServiceCommand = {service:string; action:'stop'|'start'}
 export type MetersCommand = {kind:'meters'; meter_count:number; demand_factor:number}
 export type PolicyCommand = {kind:'policy'; policy:Policy}
@@ -17,6 +20,10 @@ export type RunState = {id:string; step:number; startedAt:number; stepStartedAt:
  touched?:{meters:boolean; policy:boolean}
  /** When the current step's `until` first held (continuously) for a step with `dwellMs`. */
  matchedAt?:number
+ /** The gateway a `target` step stopped. It stays here after its restart takes it out of `stopped`, so later steps can still name it. */
+ target?:string
+ /** The run uses the steps written for a backend without standby gateways. */
+ legacy?:true
  captured?:Capture}
 type StepCommand = Command|Command[]|((o:Observation,run:RunState)=>Command|Command[]|null)
 export type Step = {label:string; command?:StepCommand; until:(o:Observation,run:RunState)=>boolean; timeoutMs:number
@@ -27,8 +34,12 @@ export type Step = {label:string; command?:StepCommand; until:(o:Observation,run
  /** While `until` holds, record the fairness picture; marked final when the step completes. */
  capture?:boolean
  /** The step re-sends the restore commands until observed, and completing it clears what the run changed. */
- restores?:boolean}
-export type Scenario = {id:string; title:string; blurb:string; steps:Step[]}
+ restores?:boolean
+ /** The service this step's command stops is remembered as `run.target`. */
+ target?:boolean}
+export type Scenario = {id:string; title:string; blurb:string; steps:Step[]
+ /** Wording and steps for a backend that has no standby gateways. A run uses them when the first observation carries no `pairs`. */
+ legacy?:{blurb:string; steps:Step[]}}
 
 export const coordinators=['coordinator1','coordinator2','coordinator3']
 /** An observation must be this much newer than a restore command before it can confirm the service is back. */
@@ -50,14 +61,38 @@ export function restoreCommands(run:RunState):Command[]{
  return commands
 }
 
+/**
+ * Which queued command goes out next. Stress commands of a run that is no longer running are dropped. A command whose key went out less
+ * than `retryMs` ago waits in the queue instead of being lost: a step's command is issued once, so dropping it would leave a stopped
+ * service stopped (the run no longer lists it) until the step timed out. Returns the command to send, if any, and the queue that remains.
+ */
+export function nextCommand(queue:Command[],run:RunState|null,sentAt:Record<string,number>,now:number,retryMs:number):{command:Command|null;queue:Command[]}{
+ const live=queue.filter(c=>!isStress(c,run)||run?.status==='running')
+ const i=live.findIndex(c=>now-(sentAt[commandKey(c)]??0)>=retryMs)
+ return i<0?{command:null,queue:live}:{command:live[i],queue:live.filter((_,k)=>k!==i)}
+}
+
 /** The HTTP request that carries a command to the control service (same-origin POST with a JSON body). */
 export const commandRequest=(c:Command):{path:string;body:object}=>isService(c)?{path:'/api/actions',body:{service:c.service,action:c.action}}:c.kind==='meters'?{path:'/api/meters/config',body:{meter_count:c.meter_count,demand_factor:c.demand_factor}}:{path:'/api/policy',body:{policy:c.policy}}
 
 const gatewayService=(building:string)=>`gateway-${building.replaceAll('_','-')}`
+const standbyService=(building:string)=>`${gatewayService(building)}-standby`
+/** The standby of a primary gateway service and the primary of a standby, by service name. */
+const partnerOf=(service:string)=>service.endsWith('-standby')?service.slice(0,-'-standby'.length):`${service}-standby`
+/** What the observation says about one gateway service, `undefined` when it carries no pair for it. */
+function gatewayStateOf(o:Observation,service:string):GatewayState|undefined{
+ for(const [building,pair] of Object.entries(o.pairs??{})){
+  if(service===gatewayService(building))return pair.primary
+  if(service===standbyService(building))return pair.standby
+ }
+ return undefined
+}
+const answers=(state:GatewayState|undefined)=>state==='serving'||state==='standby'||state==='waiting'
 /** Whether the observation proves the service is running. Stale observations prove nothing. */
 export function isUp(service:string,o:Observation){
  if(o.stale)return false
  if(coordinators.includes(service))return o.nodesUp.includes(service)
+ if(service.endsWith('-standby')&&service.startsWith('gateway-'))return answers(gatewayStateOf(o,service))
  if(service.startsWith('gateway-'))return o.buildingsUp.some(b=>gatewayService(b)===service)
  if(service==='postgres')return o.postgresUp===true
  return false
@@ -65,6 +100,12 @@ export function isUp(service:string,o:Observation){
 const healthy=(o:Observation)=>!o.stale&&o.quorum&&o.leader!==null&&o.nodesUp.length===coordinators.length
 const stamp=(at:number)=>new Date(at).toISOString().slice(11,19)
 const firstDown=(o:Observation)=>{const id=coordinators.find(c=>!o.nodesUp.includes(c));return id?{service:id,action:'start' as const}:null}
+/** Every gateway of every pair answers (a gateway that is only waiting still answers). */
+const allGatewaysUp=(o:Observation)=>!o.stale&&!!o.pairs&&Object.values(o.pairs).every(p=>answers(p.primary)&&answers(p.standby))
+/** Hamra has exactly one gateway serving and the other one standing by, and every gateway answers. */
+const hamraPairReady=(o:Observation)=>{const p=o.pairs?.hamra;return !o.stale&&allGatewaysUp(o)&&!!p&&(p.primary==='serving'&&p.standby==='standby'||p.standby==='serving'&&p.primary==='standby')}
+/** The Hamra gateway service that serves now, `null` unless exactly one does. */
+const hamraServing=(o:Observation)=>{const p=o.pairs?.hamra;return !p?null:p.primary==='serving'&&p.standby!=='serving'?gatewayService('hamra'):p.standby==='serving'&&p.primary!=='serving'?standbyService('hamra'):null}
 
 export const scenarios:Scenario[]=[
  {id:'leader-failover',title:'Leader failover',blurb:'Stop the elected Raft leader. The remaining majority should elect a replacement and keep granting within capacity.',steps:[
@@ -79,11 +120,17 @@ export const scenarios:Scenario[]=[
   {label:'Restart the first stopped coordinator',command:firstDown,until:o=>!o.stale&&o.nodesUp.length===2,timeoutMs:30000},
   {label:'Restart the remaining coordinator',command:firstDown,until:healthy,timeoutMs:45000},
  ]},
- {id:'gateway-crash',title:'Gateway crash',blurb:'Stop the Hamra gateway. Its lease is not renewed and local service stops at the safe deadline. Gateways are not replicated.',steps:[
+ {id:'gateway-crash',title:'Gateway crash',blurb:'Stop the Hamra gateway. Its standby takes over once the lease lapses, about 12 to 15 seconds.',steps:[
+  {label:'Confirm every gateway reports and Hamra has one serving and one on standby',until:hamraPairReady,timeoutMs:20000},
+  // Whichever Hamra gateway serves is stopped, so the test also works after an earlier run left the standby serving.
+  {label:'Stop the Hamra gateway that is serving',target:true,command:o=>{const service=hamraServing(o);return service?{service,action:'stop'}:null},until:(o,run)=>!!run.target&&gatewayStateOf(o,run.target)==='stopped',timeoutMs:30000},
+  {label:'Wait for the Hamra standby to take over',until:(o,run)=>!!run.target&&gatewayStateOf(o,partnerOf(run.target))==='serving',timeoutMs:45000},
+  {label:'Restart the stopped gateway; it should return as the standby',command:(_,run)=>run.target?{service:run.target,action:'start'}:null,until:(o,run)=>!!run.target&&allGatewaysUp(o)&&gatewayStateOf(o,run.target)==='standby'&&gatewayStateOf(o,partnerOf(run.target))==='serving',timeoutMs:45000},
+ ],legacy:{blurb:'Stop the Hamra gateway. Its lease is not renewed and local service stops at the safe deadline. Gateways are not replicated.',steps:[
   {label:'Confirm all three gateways report',until:o=>!o.stale&&o.buildingsUp.length===3,timeoutMs:20000},
   {label:'Stop the Hamra gateway',command:{service:'gateway-hamra',action:'stop'},until:o=>!o.stale&&!o.buildingsUp.includes('hamra'),timeoutMs:30000},
   {label:'Restart the Hamra gateway',command:{service:'gateway-hamra',action:'start'},until:o=>!o.stale&&o.buildingsUp.length===3,timeoutMs:45000},
- ]},
+ ]}},
  {id:'database-outage',title:'Database outage',blurb:'Stop PostgreSQL. Grants continue through Raft and audit writes catch up after recovery. PostgreSQL has no failover.',steps:[
   {label:'Confirm PostgreSQL is connected',until:o=>!o.stale&&o.postgresUp===true,timeoutMs:20000},
   {label:'Stop PostgreSQL',command:{service:'postgres',action:'stop'},until:o=>!o.stale&&o.postgresUp===false,timeoutMs:30000},
@@ -105,6 +152,10 @@ export const overload:Scenario={id:'overload',title:'Overload',blurb:'Settle at 
 export const catalogue:Scenario[]=[...scenarios,overload]
 
 const find=(id:string)=>{const s=catalogue.find(x=>x.id===id);if(!s)throw Error(`Unknown scenario ${id}`);return s}
+/** The scenario as written for a backend with or without standby gateways. Only a scenario with a `legacy` form differs. */
+export const forBackend=(s:Scenario,legacy:boolean):Scenario=>legacy&&s.legacy?{...s,...s.legacy}:s
+/** The scenario as this run plays it. */
+export const scenarioOf=(run:RunState):Scenario=>forBackend(find(run.id),!!run.legacy)
 
 /** The fairness picture in one observation. */
 export const capture=(o:Observation,final=false):Capture=>({at:o.at,policy:o.policy??null,fairness:fairnessScore(o.wants,o.reserved),reserved:o.granted,wanted:sumAmps(o.wants),capacity:o.capacity,final})
@@ -122,13 +173,17 @@ function enter(run:RunState,scenario:Scenario,step:number,o:Observation,now:numb
   if(isService(command))next.stopped=command.action==='stop'?[...new Set([...next.stopped,command.service])]:next.stopped.filter(s=>s!==command.service)
   else next.touched={meters:!!next.touched?.meters||command.kind==='meters',policy:!!next.touched?.policy||command.kind==='policy'}
  }
+ const stop=s.target?commands.find(c=>isService(c)&&c.action==='stop'):undefined
+ if(stop&&isService(stop))next.target=stop.service
  return{run:next,commands}
 }
 
 /** Start a run. The first step's command (if any) is resolved from the observation passed in. */
 export function begin(scenario:Scenario,o:Observation,now:number,params?:{policy:Policy}):{run:RunState;commands:Command[]}{
- const run:RunState={id:scenario.id,step:0,startedAt:now,stepStartedAt:now,stopped:[],status:'running',log:[`${stamp(now)} Started ${scenario.title}${params?` with ${policyLabel[params.policy]}`:''}`],...(params?{params}:{})}
- return enter(run,scenario,0,o,now)
+ // A backend that reports no standby gateways gets the steps written for it, so the test still works on older stacks.
+ const legacy=!!scenario.legacy&&!o.pairs
+ const run:RunState={id:scenario.id,step:0,startedAt:now,stepStartedAt:now,stopped:[],status:'running',log:[`${stamp(now)} Started ${scenario.title}${params?` with ${policyLabel[params.policy]}`:''}`],...(params?{params}:{}),...(legacy?{legacy:true as const}:{})}
+ return enter(run,forBackend(scenario,legacy),0,o,now)
 }
 
 /** Request cancellation. Restoration is performed by the following advance calls. */
@@ -144,7 +199,7 @@ const finish=(run:RunState,status:'done'|'timeout',now:number,why:string):{run:R
 
 /** Progress of the observation window of the current step, null when the step has none or has not started holding. */
 export function dwellProgress(run:RunState,now:number):{elapsedMs:number;totalMs:number}|null{
- const s=find(run.id).steps[run.step]
+ const s=scenarioOf(run).steps[run.step]
  if(run.status!=='running'||!s?.dwellMs||run.matchedAt===undefined)return null
  return{elapsedMs:Math.min(s.dwellMs,Math.max(0,now-run.matchedAt)),totalMs:s.dwellMs}
 }
@@ -155,7 +210,7 @@ export function dwellProgress(run:RunState,now:number):{elapsedMs:number;totalMs
  * until a fresh observation shows each of them back.
  */
 export function advance(run:RunState,o:Observation,now:number):{run:RunState;commands:Command[]}{
- const scenario=find(run.id)
+ const scenario=scenarioOf(run)
  if(run.status==='running'){
   const s=scenario.steps[run.step],holds=!o.stale&&s.until(o,run)
   let cur=run
@@ -203,6 +258,16 @@ export function deriveTimeline(prev:Observation|null,next:Observation):TimelineE
  for(const id of next.nodesUp)if(!prev.nodesUp.includes(id))events.push({at,kind:'node_up',detail:`${id} observed reachable`})
  for(const id of prev.buildingsUp)if(!next.buildingsUp.includes(id))events.push({at,kind:'node_down',detail:`gateway ${id.replaceAll('_','-')} observed unreachable`})
  for(const id of next.buildingsUp)if(!prev.buildingsUp.includes(id))events.push({at,kind:'node_up',detail:`gateway ${id.replaceAll('_','-')} observed reachable`})
+ for(const [id,pair] of Object.entries(next.pairs??{})){
+  const was=prev.pairs?.[id]
+  if(!was)continue
+  const name=id.replaceAll('_','-')
+  // A gateway that was standing by (refused because the other one held the building) and now serves has taken over.
+  for(const side of ['primary','standby'] as const)if(was[side]==='standby'&&pair[side]==='serving')events.push({at,kind:'standby_took_over',detail:side==='standby'?`${name} standby gateway observed serving`:`${name} primary gateway, which was on standby, observed serving`})
+  // The primaries are covered by buildingsUp above; the standbys have no other source.
+  if(was.standby!=='stopped'&&pair.standby==='stopped')events.push({at,kind:'node_down',detail:`standby gateway ${name} observed unreachable`})
+  if(was.standby==='stopped'&&pair.standby!=='stopped'&&pair.standby!=='unknown')events.push({at,kind:'node_up',detail:`standby gateway ${name} observed reachable`})
+ }
  if(prev.leader&&prev.leader!==next.leader)events.push({at,kind:'leader_lost',detail:`${prev.leader} no longer observed as leader`})
  if(prev.quorum&&!next.quorum)events.push({at,kind:'quorum_lost',detail:'Majority no longer observed'})
  if(!prev.quorum&&next.quorum)events.push({at,kind:'quorum_restored',detail:'Majority observed again'})
