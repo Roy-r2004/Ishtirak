@@ -193,7 +193,7 @@ A demo mode (`?demo=1`, or automatic when the backend cannot be reached) runs th
 | Creativity and practical relevance | Neighborhood-specific capacity coordination with a live operator, guided failure tests that break the running system on purpose, a max-min fair-sharing policy committed through Raft, and a capacity proof drawn from observations |
 | Functional application | `docker compose up --build -d`; local dashboard at port 8088 |
 | Documentation | This report, README, source tests, measured JSON evidence |
-| PowerPoint presentation | `docs/Ishtirak_Presentation.pptx`, with architecture, why it is distributed, safety, the live console and failure tests, results, trade-offs and limits, and speaker notes |
+| PowerPoint presentation | `docs/Ishtirak_Presentation.pptx`, with architecture, why it is distributed, safety, the live console and failure tests, the gateway standby, fair sharing, results, trade-offs and limits, and speaker notes |
 
 The project addresses each required deliverable and the named distributed-systems concepts. This mapping is evidence of coverage, not a promise of a particular rubric score.
 
